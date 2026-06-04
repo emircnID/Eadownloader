@@ -25,9 +25,9 @@ newgrp docker
 Repo'yu sunucuya cek:
 
 ```bash
-git clone https://github.com/KULLANICI_ADIN/EaDownloader.git
+git clone https://github.com/emircnID/EaDownloader.git
 cd EaDownloader
-cp .env.example .env
+nano .env
 ```
 
 `.env` icinde en az sunlari degistir:
@@ -41,7 +41,8 @@ ADMINS=telegram_user_id
 Sonra baslat:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f bot
 ```
 
@@ -49,7 +50,8 @@ Guncelleme icin:
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ## Cookie Dosyalari

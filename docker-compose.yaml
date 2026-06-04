@@ -1,9 +1,6 @@
 services:
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: eadownloader:latest
+    image: ghcr.io/emircnid/eadownloader:latest
     container_name: eadownloader-bot
     restart: unless-stopped
     networks:

@@ -11,11 +11,32 @@ import (
 
 var facebookHost = []string{"facebook"}
 
+var WatchShortExtractor = &models.Extractor{
+	ID:          "facebook",
+	DisplayName: "Facebook (Short)",
+
+	URLPattern: regexp.MustCompile(`https?://fb\.watch/(?P<id>[a-zA-Z0-9_-]+)`),
+	Host:       []string{"fb"},
+
+	Redirect: true,
+
+	GetFunc: func(ctx *models.ExtractorContext) (*models.ExtractorResponse, error) {
+		finalURL, err := ctx.FetchLocation(
+			ctx.ContentURL,
+			&networking.RequestParams{Headers: webHeaders},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to follow short redirect: %w", err)
+		}
+		return &models.ExtractorResponse{URL: finalURL}, nil
+	},
+}
+
 var ShareExtractor = &models.Extractor{
 	ID:          "facebook",
 	DisplayName: "Facebook (Share)",
 
-	URLPattern: regexp.MustCompile(`https?://(?:(?:www|m)\.)?facebook\.com/share/(?:r|v|p)/(?P<id>[a-zA-Z0-9]+)`),
+	URLPattern: regexp.MustCompile(`https?://(?:(?:www|m)\.)?facebook\.com/share/(?:r|v|p)/(?P<id>[a-zA-Z0-9_-]+)`),
 	Host:       facebookHost,
 
 	Redirect: true,
@@ -55,9 +76,6 @@ var Extractor = &models.Extractor{
 }
 
 func GetMedia(ctx *models.ExtractorContext) (*models.Media, error) {
-	if ctx.HTTPClient.Cookies == nil {
-		return nil, fmt.Errorf("auth cookies are required for facebook")
-	}
 	videoData, err := GetVideoData(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get video data: %w", err)

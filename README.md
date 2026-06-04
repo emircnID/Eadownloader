@@ -8,6 +8,7 @@ Desteklenen platformlar:
 - Instagram
 - TikTok
 - Twitter (X)
+- YouTube
 
 Bot public calisacak sekilde hazirlandi. Whitelist varsayilan olarak kapali, diller sadece English ve Turkce.
 
@@ -56,13 +57,15 @@ docker compose up -d
 
 ## Cookie Dosyalari
 
-Twitter/X ve Facebook bazen giris cookie'si olmadan medya vermez.
+Twitter/X, Facebook ve YouTube public iceriklerde cookiesiz denenir. Private,
+yas kisitli veya giris isteyen icerikler yine cookie gerektirebilir.
 
 Cookie dosyalarini Netscape formatinda su yollara koy:
 
 ```text
 private/cookies/twitter.txt
 private/cookies/facebook.txt
+private/cookies/youtube.txt
 ```
 
 ## Notlar

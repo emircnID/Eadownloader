@@ -126,3 +126,51 @@ type Variant struct {
 	ContentType string `json:"content_type"`
 	URL         string `json:"url"`
 }
+
+type FXAPIResponse struct {
+	Code    int       `json:"code"`
+	Status *FXStatus `json:"status"`
+	Message string   `json:"message"`
+}
+
+type FXStatus struct {
+	ID    string   `json:"id"`
+	URL   string   `json:"url"`
+	Text  string   `json:"text"`
+	Media *FXMedia `json:"media"`
+}
+
+type FXMedia struct {
+	Photos []FXPhoto `json:"photos"`
+	Videos []FXVideo `json:"videos"`
+}
+
+type FXPhoto struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`
+	URL    string `json:"url"`
+	Width  int32  `json:"width"`
+	Height int32  `json:"height"`
+}
+
+type FXVideo struct {
+	ID           string          `json:"id"`
+	Type         string          `json:"type"`
+	URL          string          `json:"url"`
+	Width        int32           `json:"width"`
+	Height       int32           `json:"height"`
+	ThumbnailURL string          `json:"thumbnail_url"`
+	Duration     float64         `json:"duration"`
+	Filesize     int64           `json:"filesize"`
+	Formats      []FXVideoFormat `json:"formats"`
+}
+
+type FXVideoFormat struct {
+	Container string `json:"container"`
+	Codec     string `json:"codec"`
+	Bitrate   int64  `json:"bitrate"`
+	URL       string `json:"url"`
+	Size      int64  `json:"size"`
+	Height    int32  `json:"height"`
+	Width     int32  `json:"width"`
+}

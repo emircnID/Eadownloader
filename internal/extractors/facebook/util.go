@@ -3,9 +3,11 @@ package facebook
 import (
 	"bytes"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -26,15 +28,26 @@ var webHeaders = map[string]string{
 }
 
 var (
-	hdURLPattern = regexp.MustCompile(
-		`"progressive_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"failure_reason"\s*:\s*[^,]+\s*,\s*"metadata"\s*:\s*\{\s*"quality"\s*:\s*"HD"\s*\}`,
-	)
-	sdURLPattern = regexp.MustCompile(
-		`"progressive_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"failure_reason"\s*:\s*[^,]+\s*,\s*"metadata"\s*:\s*\{\s*"quality"\s*:\s*"SD"\s*\}`,
-	)
+	hdURLPatterns = []*regexp.Regexp{
+		regexp.MustCompile(
+			`"progressive_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"failure_reason"\s*:\s*[^,]+\s*,\s*"metadata"\s*:\s*\{\s*"quality"\s*:\s*"HD"\s*\}`,
+		),
+		regexp.MustCompile(`"browser_native_hd_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+		regexp.MustCompile(`"playable_url_quality_hd"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+		regexp.MustCompile(`"hd_src"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+	}
+	sdURLPatterns = []*regexp.Regexp{
+		regexp.MustCompile(
+			`"progressive_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,\s*"failure_reason"\s*:\s*[^,]+\s*,\s*"metadata"\s*:\s*\{\s*"quality"\s*:\s*"SD"\s*\}`,
+		),
+		regexp.MustCompile(`"browser_native_sd_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+		regexp.MustCompile(`"playable_url"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+		regexp.MustCompile(`"sd_src"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`),
+	}
 	titlePattern = regexp.MustCompile(
 		`"title"\s*:\s*\{\s*"text"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"`,
 	)
+	ogVideoPattern = regexp.MustCompile(`<meta\s+property="og:video(?::secure_url)?"\s+content="([^"]+)"`)
 )
 
 func GetVideoData(ctx *models.ExtractorContext) (*VideoData, error) {
@@ -83,15 +96,20 @@ func parseVideoFromBody(body []byte, videoID string) (*VideoData, error) {
 		section = body
 	}
 
-	if match := hdURLPattern.FindSubmatch(section); len(match) >= 2 {
-		data.HDURL = unescapeFacebookURL(string(match[1]))
+	data.HDURL = firstMatchedURL(section, hdURLPatterns)
+	data.SDURL = firstMatchedURL(section, sdURLPatterns)
+	if data.HDURL == "" {
+		data.HDURL = firstMatchedURL(body, hdURLPatterns)
 	}
-	if match := sdURLPattern.FindSubmatch(section); len(match) >= 2 {
-		data.SDURL = unescapeFacebookURL(string(match[1]))
+	if data.SDURL == "" {
+		data.SDURL = firstMatchedURL(body, sdURLPatterns)
+	}
+	if data.SDURL == "" {
+		data.SDURL = firstMatchedURL(body, []*regexp.Regexp{ogVideoPattern})
 	}
 	// title can be anywhere in the page
 	if match := titlePattern.FindSubmatch(body); len(match) >= 2 {
-		data.Title = unescapeUnicode(string(match[1]))
+		data.Title = unescapeFacebookString(string(match[1]))
 	}
 
 	if data.HDURL == "" && data.SDURL == "" {
@@ -99,6 +117,16 @@ func parseVideoFromBody(body []byte, videoID string) (*VideoData, error) {
 	}
 
 	return data, nil
+}
+
+func firstMatchedURL(body []byte, patterns []*regexp.Regexp) string {
+	for _, pattern := range patterns {
+		match := pattern.FindSubmatch(body)
+		if len(match) >= 2 {
+			return unescapeFacebookURL(string(match[1]))
+		}
+	}
+	return ""
 }
 
 // findVideoSection returns the slice of body containing the video delivery
@@ -133,9 +161,17 @@ func findVideoSection(body []byte, videoID string) []byte {
 }
 
 func unescapeFacebookURL(s string) string {
+	return unescapeFacebookString(s)
+}
+
+func unescapeFacebookString(s string) string {
 	s = strings.ReplaceAll(s, `\/`, "/")
-	s = unescapeUnicode(s)
-	return s
+	if unquoted, err := strconv.Unquote(`"` + s + `"`); err == nil {
+		s = unquoted
+	} else {
+		s = unescapeUnicode(s)
+	}
+	return html.UnescapeString(s)
 }
 
 func unescapeUnicode(s string) string {

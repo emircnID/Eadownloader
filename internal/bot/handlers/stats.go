@@ -319,6 +319,13 @@ func formatChatDisplayName(chat database.ListChatsByTypeRow) string {
 			html.EscapeString(name),
 		)
 	}
+	if chat.Username != "" {
+		return fmt.Sprintf(
+			"<a href='https://t.me/%s'>%s</a>",
+			html.EscapeString(chat.Username),
+			html.EscapeString(name),
+		)
+	}
 	return html.EscapeString(name)
 }
 

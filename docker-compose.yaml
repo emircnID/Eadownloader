@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ghcr.io/emircnid/eadownloader:latest
+    image: ghcr.io/emircnid/ea-downloader:latest
     container_name: eadownloader-bot
     restart: unless-stopped
     networks:

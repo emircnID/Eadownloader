@@ -99,7 +99,7 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 		task.ExtractorCtx,
 		selectedMedia,
 		false,
-		false,
+		true,
 	); err != nil {
 		core.HandleError(bot, ctx, task.ExtractorCtx, err)
 		return ext.EndGroups

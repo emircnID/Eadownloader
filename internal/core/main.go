@@ -59,10 +59,32 @@ func HandlePreparedDownloadTask(
 	isSpoiler bool,
 	cache bool,
 ) error {
-	key := extractorCtx.Key()
+	key := extractorCtx.Extractor.ID + "/" + media.ContentID
 
 	acquireQueue(key)
 	defer releaseQueue(key)
+
+	if cache && config.Env.Caching {
+		taskResult, err := taskFromDatabaseByContentID(extractorCtx, media.ContentID)
+		if err == nil {
+			caption := formatCaption(
+				taskResult.Media,
+				bot.Username,
+				extractorCtx.Chat.Captions,
+			)
+
+			_, err = SendFormats(
+				bot, ctx, extractorCtx,
+				taskResult.Media, taskResult.Formats,
+				&models.SendFormatsOptions{
+					Caption:   caption,
+					IsSpoiler: isSpoiler,
+					IsStored:  true,
+				},
+			)
+			return err
+		}
+	}
 
 	formats, err := downloadMediaFormats(extractorCtx, media)
 	if err != nil {
@@ -140,11 +162,15 @@ func executeDownload(extractorCtx *models.ExtractorContext, isInline bool) (*mod
 }
 
 func taskFromDatabase(ctx *models.ExtractorContext) (*models.TaskResult, error) {
+	return taskFromDatabaseByContentID(ctx, ctx.ContentID)
+}
+
+func taskFromDatabaseByContentID(ctx *models.ExtractorContext, contentID string) (*models.TaskResult, error) {
 	mediaRow, err := database.Q().GetMediaByContentID(
 		ctx.Context,
 		database.GetMediaByContentIDParams{
 			ExtractorID: ctx.Extractor.ID,
-			ContentID:   ctx.ContentID,
+			ContentID:   contentID,
 		},
 	)
 	if err != nil {

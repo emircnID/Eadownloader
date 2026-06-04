@@ -3,7 +3,9 @@ package youtube
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -53,39 +55,36 @@ func GetMedia(ctx *models.ExtractorContext) (*models.Media, error) {
 }
 
 func FetchInfo(ctx *models.ExtractorContext) (*Info, error) {
-	cmd := exec.CommandContext(
-		ctx.Context,
-		"yt-dlp",
-		"--dump-single-json",
-		"--no-playlist",
-		"--no-warnings",
-		ctx.ContentURL,
-	)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	output, err := cmd.Output()
-	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
+	var lastErr error
+	for _, args := range ytDLPInfoArgs(ctx.ContentURL) {
+		output, err := runYTDLP(ctx, args)
+		if err != nil {
+			lastErr = err
+			if !isBotCheckError(err) {
+				break
+			}
+			ctx.Warnf("youtube metadata fallback after yt-dlp error: %v", err)
+			continue
 		}
-		return nil, fmt.Errorf("yt-dlp failed: %s", msg)
+
+		var info Info
+		if err := sonic.ConfigFastest.Unmarshal(output, &info); err != nil {
+			return nil, fmt.Errorf("failed to parse yt-dlp output: %w", err)
+		}
+		info.RequestedID = ctx.ContentID
+		if info.ID == "" {
+			info.ID = ctx.ContentID
+		}
+		if info.WebpageURL == "" {
+			info.WebpageURL = ctx.ContentURL
+		}
+		return &info, nil
 	}
 
-	var info Info
-	if err := sonic.ConfigFastest.Unmarshal(output, &info); err != nil {
-		return nil, fmt.Errorf("failed to parse yt-dlp output: %w", err)
+	if lastErr != nil {
+		return nil, lastErr
 	}
-	info.RequestedID = ctx.ContentID
-	if info.ID == "" {
-		info.ID = ctx.ContentID
-	}
-	if info.WebpageURL == "" {
-		info.WebpageURL = ctx.ContentURL
-	}
-	return &info, nil
+	return nil, fmt.Errorf("yt-dlp failed")
 }
 
 func BuildMedia(ctx *models.ExtractorContext, info *Info) (*models.Media, error) {
@@ -386,4 +385,64 @@ func hasVideo(format *Format) bool {
 
 func hasAudio(format *Format) bool {
 	return format.AudioCodec != "" && format.AudioCodec != "none"
+}
+
+func ytDLPInfoArgs(contentURL string) [][]string {
+	base := []string{
+		"--dump-single-json",
+		"--no-playlist",
+		"--no-warnings",
+		"--force-ipv4",
+		"--sleep-requests", "1",
+	}
+	if cookiePath := youtubeCookiePath(); cookiePath != "" {
+		base = append(base, "--cookies", cookiePath)
+	}
+
+	return [][]string{
+		append(slices.Clone(base), contentURL),
+		append(
+			slices.Clone(base),
+			"--extractor-args",
+			"youtube:player_client=tv,web_embedded,android;formats=missing_pot",
+			contentURL,
+		),
+		append(
+			slices.Clone(base),
+			"--extractor-args",
+			"youtube:player_client=default,-web_safari;formats=missing_pot",
+			contentURL,
+		),
+	}
+}
+
+func runYTDLP(ctx *models.ExtractorContext, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx.Context, "yt-dlp", args...)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("yt-dlp failed: %s", msg)
+	}
+	return output, nil
+}
+
+func isBotCheckError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "sign in to confirm") ||
+		strings.Contains(msg, "not a bot")
+}
+
+func youtubeCookiePath() string {
+	cookiePath := filepath.Join("private", "cookies", "youtube.txt")
+	if _, err := os.Stat(cookiePath); err != nil {
+		return ""
+	}
+	return cookiePath
 }

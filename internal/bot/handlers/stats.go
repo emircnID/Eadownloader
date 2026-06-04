@@ -311,6 +311,18 @@ func statsPeriod(period string) (time.Time, string) {
 }
 
 func formatChatDisplayName(chat database.ListChatsByTypeRow) string {
+	name := chatDisplayLabel(chat)
+	if chat.Type == database.ChatTypePrivate {
+		return fmt.Sprintf(
+			"<a href='tg://user?id=%d'>%s</a>",
+			chat.ChatID,
+			html.EscapeString(name),
+		)
+	}
+	return html.EscapeString(name)
+}
+
+func chatDisplayLabel(chat database.ListChatsByTypeRow) string {
 	name := strings.TrimSpace(chat.Title)
 	if name == "" {
 		name = strings.TrimSpace(strings.Join([]string{chat.FirstName, chat.LastName}, " "))
@@ -324,7 +336,7 @@ func formatChatDisplayName(chat database.ListChatsByTypeRow) string {
 	if chat.Username != "" && !strings.Contains(name, "@"+chat.Username) {
 		name += " (@" + chat.Username + ")"
 	}
-	return html.EscapeString(name)
+	return name
 }
 
 func formatLanguageMap(values map[string]int64) string {

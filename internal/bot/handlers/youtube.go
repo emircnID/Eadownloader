@@ -1,0 +1,151 @@
+package handlers
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext"
+	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	"eadownloader/internal/core"
+	"eadownloader/internal/extractors/youtube"
+	"eadownloader/internal/models"
+)
+
+type youtubeTask struct {
+	ExtractorCtx *models.ExtractorContext
+	Media        *models.Media
+}
+
+var youtubeTasks = expirable.NewLRU[string, *youtubeTask](0, nil, 10*time.Minute)
+
+func YouTubePromptHandler(bot *gotgbot.Bot, ctx *ext.Context, extractorCtx *models.ExtractorContext) error {
+	media, err := youtube.GetMedia(extractorCtx)
+	if err != nil {
+		extractorCtx.CancelFunc()
+		return err
+	}
+
+	formatIDs := youtube.AvailableFormatIDs(media)
+	if len(formatIDs) == 0 {
+		extractorCtx.CancelFunc()
+		return fmt.Errorf("no youtube formats available")
+	}
+
+	taskID := uuid.NewString()[:8]
+	if ok := youtubeTasks.Add(taskID, &youtubeTask{
+		ExtractorCtx: extractorCtx,
+		Media:        media,
+	}); ok {
+		extractorCtx.CancelFunc()
+		return fmt.Errorf("failed to add youtube task")
+	}
+
+	_, err = ctx.EffectiveMessage.Reply(
+		bot,
+		"YouTube formatini sec:",
+		&gotgbot.SendMessageOpts{
+			ReplyMarkup: &gotgbot.InlineKeyboardMarkup{
+				InlineKeyboard: buildYouTubeButtons(taskID, formatIDs),
+			},
+		},
+	)
+	if err != nil {
+		youtubeTasks.Remove(taskID)
+		extractorCtx.CancelFunc()
+		return err
+	}
+
+	return nil
+}
+
+func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
+	data := ctx.CallbackQuery.Data
+	parts := strings.Split(data, ".")
+	if len(parts) != 3 {
+		ctx.CallbackQuery.Answer(bot, nil)
+		return ext.EndGroups
+	}
+
+	taskID := parts[1]
+	formatID := parts[2]
+
+	task, ok := youtubeTasks.Get(taskID)
+	if !ok {
+		ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
+			Text:      "Bu secim zaman asimina ugradi. Linki tekrar gonder.",
+			ShowAlert: true,
+		})
+		return ext.EndGroups
+	}
+	youtubeTasks.Remove(taskID)
+	defer task.ExtractorCtx.CancelFunc()
+	defer task.ExtractorCtx.FilesTracker.Cleanup()
+
+	selectedMedia, err := youtube.SelectMedia(task.Media, formatID)
+	if err != nil {
+		core.HandleError(bot, ctx, task.ExtractorCtx, err)
+		return ext.EndGroups
+	}
+
+	ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
+		Text: "Indiriliyor...",
+	})
+	ctx.EffectiveMessage.EditText(
+		bot,
+		"Indiriliyor...",
+		&gotgbot.EditMessageTextOpts{
+			ReplyMarkup: gotgbot.InlineKeyboardMarkup{},
+		},
+	)
+
+	if err := core.HandlePreparedDownloadTask(
+		bot,
+		ctx,
+		task.ExtractorCtx,
+		selectedMedia,
+		false,
+		false,
+	); err != nil {
+		core.HandleError(bot, ctx, task.ExtractorCtx, err)
+		return ext.EndGroups
+	}
+
+	ctx.EffectiveMessage.Delete(bot, nil)
+	return ext.EndGroups
+}
+
+func buildYouTubeButtons(taskID string, formatIDs []string) [][]gotgbot.InlineKeyboardButton {
+	var videoRow []gotgbot.InlineKeyboardButton
+	var audioRow []gotgbot.InlineKeyboardButton
+
+	for _, formatID := range formatIDs {
+		button := gotgbot.InlineKeyboardButton{
+			Text:         formatLabel(formatID),
+			CallbackData: "youtube." + taskID + "." + formatID,
+		}
+		if formatID == "mp3" {
+			audioRow = append(audioRow, button)
+		} else {
+			videoRow = append(videoRow, button)
+		}
+	}
+
+	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 2)
+	if len(videoRow) > 0 {
+		buttons = append(buttons, videoRow)
+	}
+	if len(audioRow) > 0 {
+		buttons = append(buttons, audioRow)
+	}
+	return buttons
+}
+
+func formatLabel(formatID string) string {
+	if formatID == "mp3" {
+		return "MP3"
+	}
+	return formatID + "p"
+}

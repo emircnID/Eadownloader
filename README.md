@@ -57,15 +57,14 @@ docker compose up -d
 
 ## Cookie Dosyalari
 
-Twitter/X, Facebook ve YouTube public iceriklerde cookiesiz denenir. Private,
-yas kisitli veya giris isteyen icerikler yine cookie gerektirebilir.
+Twitter/X ve Facebook public iceriklerde cookiesiz denenir. Private,
+yas kisitli veya giris isteyen icerikler cookie gerektirebilir.
 
 Cookie dosyalarini Netscape formatinda su yollara koy:
 
 ```text
 private/cookies/twitter.txt
 private/cookies/facebook.txt
-private/cookies/youtube.txt
 ```
 
 ## Notlar

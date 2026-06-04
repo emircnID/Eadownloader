@@ -35,7 +35,8 @@ RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
     --mount=type=cache,target=/var/lib/apk,sharing=locked \
     apk add --no-cache \
         ffmpeg=8.0.1-r1 \
-        libheif=1.21.2-r0
+        libheif=1.21.2-r0 \
+        yt-dlp=2026.03.17-r0
 
 COPY --from=builder /app/eadownloader ./eadownloader
 

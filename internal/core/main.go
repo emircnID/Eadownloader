@@ -51,6 +51,42 @@ func HandleDownloadTask(
 	return nil
 }
 
+func HandlePreparedDownloadTask(
+	bot *gotgbot.Bot,
+	ctx *ext.Context,
+	extractorCtx *models.ExtractorContext,
+	media *models.Media,
+	isSpoiler bool,
+	cache bool,
+) error {
+	key := extractorCtx.Key()
+
+	acquireQueue(key)
+	defer releaseQueue(key)
+
+	formats, err := downloadMediaFormats(extractorCtx, media)
+	if err != nil {
+		return err
+	}
+
+	caption := formatCaption(
+		media,
+		bot.Username,
+		extractorCtx.Chat.Captions,
+	)
+
+	_, err = SendFormats(
+		bot, ctx, extractorCtx,
+		media, formats,
+		&models.SendFormatsOptions{
+			Caption:   caption,
+			IsSpoiler: isSpoiler,
+			IsStored:  !cache,
+		},
+	)
+	return err
+}
+
 // performs the actual download operation
 // this function is wrapped by singleflight
 // to prevent duplicate downloads

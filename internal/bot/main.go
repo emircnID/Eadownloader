@@ -116,6 +116,10 @@ func registerHandlers(dispatcher *ext.Dispatcher) *ext.Dispatcher {
 		callbackquery.Equal("inline:loading"),
 		botHandlers.InlineLoadingHandler,
 	))
+	dispatcher.AddHandler(handlers.NewCallback(
+		callbackquery.Prefix("youtube."),
+		botHandlers.YouTubeCallbackHandler,
+	))
 
 	// start
 	dispatcher.AddHandler(handlers.NewCommand(

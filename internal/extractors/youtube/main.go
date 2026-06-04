@@ -1,7 +1,9 @@
 package youtube
 
 import (
+	"bytes"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -10,17 +12,28 @@ import (
 	"eadownloader/internal/models"
 	"eadownloader/internal/plugins"
 	"eadownloader/internal/util"
+
+	"github.com/bytedance/sonic"
 )
+
+const (
+	format360 = "360"
+	format720 = "720"
+	format1080 = "1080"
+	formatAudio = "audio"
+	formatMP3 = "mp3"
+)
+
+var qualityTargets = []int32{360, 720, 1080}
 
 var Extractor = &models.Extractor{
 	ID:          "youtube",
 	DisplayName: "YouTube",
 
-	URLPattern: regexp.MustCompile(`https?://(?:(?:(?:www|m|music)\.)?youtube\.com/(?:(?:watch\?(?:[^#]*&)*v=)|shorts/|embed/|live/)|youtu\.be/)(?P<id>[a-zA-Z0-9_-]{11})`),
-	Host: []string{
-		"youtube",
-		"youtu",
-	},
+	URLPattern: regexp.MustCompile(
+		`https?://(?:(?:www|m|music)\.)?(?:(?:youtube\.com/(?:watch\?(?:[^#\s&]+&)*v=|shorts/|embed/|live/))|(?:youtu\.be/))(?P<id>[A-Za-z0-9_-]{11})`,
+	),
+	Host: []string{"youtube", "youtu"},
 
 	GetFunc: func(ctx *models.ExtractorContext) (*models.ExtractorResponse, error) {
 		media, err := GetMedia(ctx)
@@ -32,182 +45,345 @@ var Extractor = &models.Extractor{
 }
 
 func GetMedia(ctx *models.ExtractorContext) (*models.Media, error) {
-	playerResponse, err := GetPlayerResponse(ctx)
+	info, err := FetchInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return BuildMedia(ctx, info)
+}
 
+func FetchInfo(ctx *models.ExtractorContext) (*Info, error) {
+	cmd := exec.CommandContext(
+		ctx.Context,
+		"yt-dlp",
+		"--dump-single-json",
+		"--no-playlist",
+		"--no-warnings",
+		ctx.ContentURL,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("yt-dlp failed: %s", msg)
+	}
+
+	var info Info
+	if err := sonic.ConfigFastest.Unmarshal(output, &info); err != nil {
+		return nil, fmt.Errorf("failed to parse yt-dlp output: %w", err)
+	}
+	info.RequestedID = ctx.ContentID
+	if info.ID == "" {
+		info.ID = ctx.ContentID
+	}
+	if info.WebpageURL == "" {
+		info.WebpageURL = ctx.ContentURL
+	}
+	return &info, nil
+}
+
+func BuildMedia(ctx *models.ExtractorContext, info *Info) (*models.Media, error) {
 	media := ctx.NewMedia()
-	media.SetCaption(playerResponse.VideoDetails.Title)
+	media.ContentID = info.ID
+	media.ContentURL = info.WebpageURL
+	media.SetCaption(info.Title)
 
 	item := media.NewItem()
-	audioFormats := buildAudioFormats(playerResponse)
-	videoFormats := buildVideoFormats(playerResponse, audioFormats)
-	progressiveFormats := buildProgressiveFormats(playerResponse)
 
-	item.AddFormats(progressiveFormats...)
-	item.AddFormats(videoFormats...)
-	item.AddFormats(audioFormats...)
+	mergeAudioFormat := bestMergeAudioFormat(info)
+	audioFormat := bestAudioFormat(info)
+	for _, target := range qualityTargets {
+		format := bestVideoFormat(info, target)
+		if format == nil {
+			continue
+		}
+		if !hasAudio(format) && mergeAudioFormat == nil {
+			continue
+		}
+		mediaFormat := videoMediaFormat(info, format, target)
+		item.AddFormats(mediaFormat)
+	}
+
+	if mergeAudioFormat != nil {
+		item.AddFormats(mergeAudioMediaFormat(info, mergeAudioFormat))
+	}
+	if audioFormat != nil {
+		item.AddFormats(mp3AudioMediaFormat(info, audioFormat))
+	}
 
 	if len(item.Formats) == 0 {
 		return nil, fmt.Errorf("no downloadable youtube formats found")
 	}
-
 	return media, nil
 }
 
-func buildProgressiveFormats(resp *PlayerResponse) []*models.MediaFormat {
-	formats := make([]*models.MediaFormat, 0)
-	for _, source := range resp.StreamingData.Formats {
-		mediaURL := directFormatURL(source)
-		if mediaURL == "" || !isVideoFormat(source) || !hasAudio(source) {
+func AvailableFormatIDs(media *models.Media) []string {
+	if media == nil || len(media.Items) == 0 {
+		return nil
+	}
+	item := media.Items[0]
+	formatIDs := []string{format360, format720, format1080, formatMP3}
+	available := make([]string, 0, len(formatIDs))
+	for _, formatID := range formatIDs {
+		if item.GetFormatByID(formatID) != nil {
+			available = append(available, formatID)
+		}
+	}
+	return available
+}
+
+func SelectMedia(media *models.Media, formatID string) (*models.Media, error) {
+	if media == nil || len(media.Items) == 0 {
+		return nil, fmt.Errorf("youtube media not found")
+	}
+	item := media.Items[0]
+	selected := item.GetFormatByID(formatID)
+	if selected == nil {
+		return nil, fmt.Errorf("selected youtube format not found: %s", formatID)
+	}
+
+	selectedMedia := &models.Media{
+		ContentID:   media.ContentID + "/" + formatID,
+		ContentURL:  media.ContentURL,
+		ExtractorID: media.ExtractorID,
+		Caption:     media.Caption,
+		NSFW:        media.NSFW,
+	}
+	selectedItem := selectedMedia.NewItem()
+	selectedItem.AddFormats(cloneFormat(selected))
+
+	if selected.Type == database.MediaTypeVideo && selected.AudioCodec == "" {
+		if audio := item.GetFormatByID(formatAudio); audio != nil {
+			selectedItem.AddFormats(cloneFormat(audio))
+		}
+	}
+
+	return selectedMedia, nil
+}
+
+func bestVideoFormat(info *Info, target int32) *Format {
+	var candidates []*Format
+	for i := range info.Formats {
+		format := &info.Formats[i]
+		if !isDownloadable(format) || !hasVideo(format) {
 			continue
 		}
-		formats = append(formats, mediaFormatFromYouTubeFormat(resp, source, mediaURL, true))
-	}
-	return formats
-}
-
-func buildVideoFormats(
-	resp *PlayerResponse,
-	audioFormats []*models.MediaFormat,
-) []*models.MediaFormat {
-	formats := make([]*models.MediaFormat, 0)
-	for _, source := range resp.StreamingData.AdaptiveFormats {
-		mediaURL := directFormatURL(source)
-		if mediaURL == "" || !isVideoFormat(source) {
+		if qualityHeight(format) != target {
 			continue
 		}
-		format := mediaFormatFromYouTubeFormat(resp, source, mediaURL, false)
-		if len(audioFormats) > 0 {
-			audioFormat := bestAudioFormatForVideo(format.VideoCodec, audioFormats)
-			format.AudioCodec = audioFormat.AudioCodec
-			format.Plugins = []*models.Plugin{plugins.MergeAudio}
-		}
-		formats = append(formats, format)
-	}
-	return formats
-}
-
-func buildAudioFormats(resp *PlayerResponse) []*models.MediaFormat {
-	formats := make([]*models.MediaFormat, 0)
-	for _, source := range resp.StreamingData.AdaptiveFormats {
-		mediaURL := directFormatURL(source)
-		if mediaURL == "" || !isAudioFormat(source) {
+		if util.ParseVideoCodec(format.VideoCodec) != database.MediaCodecAvc {
 			continue
 		}
-		audioCodec := util.ParseAudioCodec(source.MimeType)
-		if audioCodec == "" {
+		if format.Ext != "mp4" {
 			continue
 		}
-		formats = append(formats, &models.MediaFormat{
-			Type:       database.MediaTypeAudio,
-			FormatID:   fmt.Sprintf("audio_%d", source.Itag),
-			URL:        []string{mediaURL},
-			AudioCodec: audioCodec,
-			Duration:   formatDurationSeconds(resp.VideoDetails.LengthSeconds, source),
-			Bitrate:    source.Bitrate,
-			FileSize:   parseInt64(source.ContentLength),
-			DownloadSettings: &models.DownloadSettings{
-				Headers: youtubeDownloadHeaders(),
-			},
-		})
+		candidates = append(candidates, format)
 	}
-	return formats
-}
-
-func mediaFormatFromYouTubeFormat(
-	resp *PlayerResponse,
-	source Format,
-	mediaURL string,
-	hasBundledAudio bool,
-) *models.MediaFormat {
-	videoCodec := util.ParseVideoCodec(source.MimeType)
-	audioCodec := database.MediaCodec("")
-	if hasBundledAudio {
-		audioCodec = util.ParseAudioCodec(source.MimeType)
+	if len(candidates) == 0 {
+		return nil
 	}
-
-	return &models.MediaFormat{
-		Type:         database.MediaTypeVideo,
-		FormatID:     fmt.Sprintf("video_%d", source.Itag),
-		URL:          []string{mediaURL},
-		VideoCodec:   videoCodec,
-		AudioCodec:   audioCodec,
-		Duration:     formatDurationSeconds(resp.VideoDetails.LengthSeconds, source),
-		ThumbnailURL: []string{bestThumbnailURL(resp)},
-		Width:        source.Width,
-		Height:       source.Height,
-		Bitrate:      source.Bitrate,
-		FileSize:     parseInt64(source.ContentLength),
-		DownloadSettings: &models.DownloadSettings{
-			Headers: youtubeDownloadHeaders(),
-		},
-	}
-}
-
-func bestAudioFormatForVideo(
-	videoCodec database.MediaCodec,
-	formats []*models.MediaFormat,
-) *models.MediaFormat {
-	preferredCodec := database.MediaCodecAac
-	if videoCodec == database.MediaCodecVp9 || videoCodec == database.MediaCodecAv1 {
-		preferredCodec = database.MediaCodecOpus
-	}
-	return sortAudioFormats(formats, preferredCodec)[0]
-}
-
-func sortAudioFormats(
-	formats []*models.MediaFormat,
-	preferredCodec database.MediaCodec,
-) []*models.MediaFormat {
-	candidates := slices.Clone(formats)
-	slices.SortFunc(candidates, func(a, b *models.MediaFormat) int {
-		if a.AudioCodec == preferredCodec && b.AudioCodec != preferredCodec {
-			return -1
-		}
-		if a.AudioCodec != preferredCodec && b.AudioCodec == preferredCodec {
+	slices.SortFunc(candidates, func(a, b *Format) int {
+		aQuality := qualityHeight(a)
+		bQuality := qualityHeight(b)
+		if aQuality != bQuality {
+			if aQuality > bQuality {
+				return -1
+			}
 			return 1
 		}
-		if a.Bitrate > b.Bitrate {
+		if a.TBR > b.TBR {
 			return -1
 		}
-		if a.Bitrate < b.Bitrate {
+		if a.TBR < b.TBR {
 			return 1
 		}
 		return 0
 	})
-	return candidates
+	return candidates[0]
 }
 
-func isVideoFormat(format Format) bool {
-	return strings.HasPrefix(format.MimeType, "video/")
+func bestAudioFormat(info *Info) *Format {
+	var candidates []*Format
+	for i := range info.Formats {
+		format := &info.Formats[i]
+		if !isDownloadable(format) || hasVideo(format) || !hasAudio(format) {
+			continue
+		}
+		audioCodec := util.ParseAudioCodec(format.AudioCodec)
+		if audioCodec != database.MediaCodecAac && audioCodec != database.MediaCodecOpus {
+			continue
+		}
+		candidates = append(candidates, format)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	slices.SortFunc(candidates, func(a, b *Format) int {
+		aCodec := util.ParseAudioCodec(a.AudioCodec)
+		bCodec := util.ParseAudioCodec(b.AudioCodec)
+		if aCodec == database.MediaCodecAac && bCodec != database.MediaCodecAac {
+			return -1
+		}
+		if aCodec != database.MediaCodecAac && bCodec == database.MediaCodecAac {
+			return 1
+		}
+		if a.TBR > b.TBR {
+			return -1
+		}
+		if a.TBR < b.TBR {
+			return 1
+		}
+		return 0
+	})
+	return candidates[0]
 }
 
-func isAudioFormat(format Format) bool {
-	return strings.HasPrefix(format.MimeType, "audio/")
+func bestMergeAudioFormat(info *Info) *Format {
+	var candidates []*Format
+	for i := range info.Formats {
+		format := &info.Formats[i]
+		if !isDownloadable(format) || hasVideo(format) || !hasAudio(format) {
+			continue
+		}
+		if util.ParseAudioCodec(format.AudioCodec) != database.MediaCodecAac {
+			continue
+		}
+		candidates = append(candidates, format)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	slices.SortFunc(candidates, func(a, b *Format) int {
+		if a.TBR > b.TBR {
+			return -1
+		}
+		if a.TBR < b.TBR {
+			return 1
+		}
+		return 0
+	})
+	return candidates[0]
 }
 
-func hasAudio(format Format) bool {
-	return util.ParseAudioCodec(format.MimeType) != ""
+func videoMediaFormat(info *Info, format *Format, target int32) *models.MediaFormat {
+	return &models.MediaFormat{
+		FormatID:     fmt.Sprintf("%d", target),
+		Type:         database.MediaTypeVideo,
+		VideoCodec:   util.ParseVideoCodec(format.VideoCodec),
+		AudioCodec:   audioCodec(format),
+		URL:          []string{format.URL},
+		ThumbnailURL: thumbnailURL(info),
+		Width:        format.Width,
+		Height:       format.Height,
+		Duration:     int32(info.Duration),
+		Bitrate:      int64(format.TBR * 1000),
+		FileSize:     fileSize(format),
+		DownloadSettings: &models.DownloadSettings{
+			Headers: downloadHeaders(),
+			Retries: 3,
+		},
+	}
 }
 
-func bestThumbnailURL(resp *PlayerResponse) string {
-	thumbnails := resp.VideoDetails.Thumbnail.Thumbnails
-	if len(thumbnails) == 0 {
+func mergeAudioMediaFormat(info *Info, format *Format) *models.MediaFormat {
+	return &models.MediaFormat{
+		FormatID:     formatAudio,
+		Type:         database.MediaTypeAudio,
+		AudioCodec:   util.ParseAudioCodec(format.AudioCodec),
+		URL:          []string{format.URL},
+		ThumbnailURL: thumbnailURL(info),
+		Duration:     int32(info.Duration),
+		Title:        info.Title,
+		Artist:       info.Uploader,
+		Bitrate:      int64(format.TBR * 1000),
+		FileSize:     fileSize(format),
+		DownloadSettings: &models.DownloadSettings{
+			Headers: downloadHeaders(),
+			Retries: 3,
+		},
+	}
+}
+
+func mp3AudioMediaFormat(info *Info, format *Format) *models.MediaFormat {
+	return &models.MediaFormat{
+		FormatID:     formatMP3,
+		Type:         database.MediaTypeAudio,
+		AudioCodec:   database.MediaCodecMp3,
+		URL:          []string{format.URL},
+		ThumbnailURL: thumbnailURL(info),
+		Duration:     int32(info.Duration),
+		Title:        info.Title,
+		Artist:       info.Uploader,
+		Bitrate:      0,
+		FileSize:     fileSize(format),
+		DownloadSettings: &models.DownloadSettings{
+			Headers: downloadHeaders(),
+			Retries: 3,
+		},
+		Plugins: []*models.Plugin{plugins.ConvertAudioToMP3},
+	}
+}
+
+func cloneFormat(format *models.MediaFormat) *models.MediaFormat {
+	clone := *format
+	clone.URL = slices.Clone(format.URL)
+	clone.ThumbnailURL = slices.Clone(format.ThumbnailURL)
+	clone.Plugins = slices.Clone(format.Plugins)
+	return &clone
+}
+
+func audioCodec(format *Format) database.MediaCodec {
+	if !hasAudio(format) {
 		return ""
 	}
-	best := thumbnails[0]
-	for _, thumbnail := range thumbnails[1:] {
-		if thumbnail.Width*thumbnail.Height > best.Width*best.Height {
-			best = thumbnail
-		}
-	}
-	return best.URL
+	return util.ParseAudioCodec(format.AudioCodec)
 }
 
-func youtubeDownloadHeaders() map[string]string {
-	headers := youtubeWebHeaders()
-	headers["Referer"] = "https://www.youtube.com/"
-	return headers
+func thumbnailURL(info *Info) []string {
+	if info.Thumbnail == "" {
+		return nil
+	}
+	return []string{info.Thumbnail}
+}
+
+func downloadHeaders() map[string]string {
+	return map[string]string{
+		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+		"Referer":    "https://www.youtube.com/",
+	}
+}
+
+func fileSize(format *Format) int64 {
+	if format.Filesize > 0 {
+		return format.Filesize
+	}
+	return format.FilesizeApprox
+}
+
+func qualityHeight(format *Format) int32 {
+	if format.Width > 0 && format.Height > 0 && format.Height > format.Width {
+		return format.Width
+	}
+	return format.Height
+}
+
+func isDownloadable(format *Format) bool {
+	if format.URL == "" {
+		return false
+	}
+	return strings.HasPrefix(format.Protocol, "http")
+}
+
+func hasVideo(format *Format) bool {
+	return format.VideoCodec != "" && format.VideoCodec != "none"
+}
+
+func hasAudio(format *Format) bool {
+	return format.AudioCodec != "" && format.AudioCodec != "none"
 }

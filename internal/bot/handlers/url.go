@@ -35,17 +35,28 @@ func URLHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 		return ext.EndGroups
 	}
 
-	defer extractorCtx.CancelFunc()
-
 	chat, err := util.ChatFromContext(ctx)
 	if err != nil {
 		logger.L.Errorf("failed to get settings from context: %v", err)
+		extractorCtx.CancelFunc()
 		return ext.EndGroups
 	}
 	if chat != nil && slices.Contains(chat.DisabledExtractors, extractorCtx.Extractor.ID) {
+		extractorCtx.CancelFunc()
 		return ext.EndGroups
 	}
 	extractorCtx.SetChat(chat)
+
+	if extractorCtx.Extractor.ID == "youtube" {
+		err = YouTubePromptHandler(bot, ctx, extractorCtx)
+		if err != nil {
+			core.HandleError(bot, ctx, extractorCtx, err)
+			return ext.EndGroups
+		}
+		return ext.EndGroups
+	}
+
+	defer extractorCtx.CancelFunc()
 
 	err = util.SendTypingAction(bot, chat.ChatID)
 	if err != nil {

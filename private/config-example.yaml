@@ -1,0 +1,17 @@
+# Optional per-platform network settings.
+# Copy this file to private/config.yaml only if you need custom settings.
+
+facebook: {}
+instagram: {}
+tiktok: {}
+twitter: {}
+
+# Example:
+# instagram:
+#   proxy: http://proxy:8080
+#   download_proxy: http://proxy:8081
+#   impersonate: true
+#
+# Twitter/X and Facebook commonly need Netscape-format cookie files:
+# private/cookies/twitter.txt
+# private/cookies/facebook.txt

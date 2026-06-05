@@ -148,7 +148,7 @@ func downloadFormat(
 	index int,
 	format *models.MediaFormat,
 ) (*models.DownloadedFormat, error) {
-	if len(format.URL) == 0 {
+	if len(format.URL) == 0 && !isYtDLPDownload(format) {
 		return nil, fmt.Errorf("no URL found for selected format")
 	}
 
@@ -191,7 +191,15 @@ func downloadFormat(
 
 	// for video and audio, download to file
 	var err error
-	if len(format.Segments) > 0 {
+	switch {
+	case isYtDLPDownload(format):
+		ctx.Progress("yt-dlp ile indiriliyor...")
+		filePath, err = download.DownloadFileWithYtDLP(
+			ctx,
+			fileName,
+			format.DownloadSettings,
+		)
+	case len(format.Segments) > 0:
 		if format.DownloadSettings != nil {
 			// add decryption key to download settings if present
 			format.DownloadSettings.DecryptionKey = format.DecryptionKey
@@ -202,7 +210,7 @@ func downloadFormat(
 			fileName,
 			format.DownloadSettings,
 		)
-	} else {
+	default:
 		filePath, err = download.DownloadFile(
 			ctx, format.URL,
 			fileName, format.DownloadSettings,
@@ -344,6 +352,12 @@ func cloneDownloadSettings(settings *models.DownloadSettings) *models.DownloadSe
 
 func skipThumbnail(format *models.MediaFormat) bool {
 	return format.DownloadSettings != nil && format.DownloadSettings.SkipThumbnail
+}
+
+func isYtDLPDownload(format *models.MediaFormat) bool {
+	return format.DownloadSettings != nil &&
+		format.DownloadSettings.YtDLPURL != "" &&
+		format.DownloadSettings.YtDLPFormat != ""
 }
 
 func collectDownloadedFormats(

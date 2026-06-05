@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -87,6 +88,91 @@ func DownloadFile(
 		lastErr = fmt.Errorf("no URLs to download")
 	}
 	return "", lastErr
+}
+
+func DownloadFileWithYtDLP(
+	ctx *models.ExtractorContext,
+	fileName string,
+	settings *models.DownloadSettings,
+) (string, error) {
+	settings = ensureDownloadSettings(settings)
+	ensureDownloadDir()
+
+	filePath := ToPath(fileName)
+	ctx.FilesTracker.Add(filePath)
+
+	args := ytDLPDownloadArgs(filePath, settings)
+	ctx.Debugf("attempting yt-dlp download with format: %s", settings.YtDLPFormat)
+
+	cmd := exec.CommandContext(ctx.Context, "yt-dlp", args...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("yt-dlp download failed: %w; stderr: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	resolvedPath, err := resolveYtDLPOutputPath(filePath)
+	if err != nil {
+		return "", err
+	}
+	if resolvedPath != filePath {
+		ctx.FilesTracker.Add(resolvedPath)
+	}
+
+	return resolvedPath, nil
+}
+
+func ytDLPDownloadArgs(filePath string, settings *models.DownloadSettings) []string {
+	concurrentFragments := fmt.Sprintf("%d", max(settings.NumConnections, 1))
+	args := []string{
+		"--no-playlist",
+		"--no-warnings",
+		"--force-ipv4",
+		"--socket-timeout", "15",
+		"--retries", fmt.Sprintf("%d", max(settings.Retries, 1)),
+		"--fragment-retries", fmt.Sprintf("%d", max(settings.Retries, 1)),
+		"--concurrent-fragments", concurrentFragments,
+		"--http-chunk-size", "10M",
+		"--newline",
+		"-f", settings.YtDLPFormat,
+		"-o", filePath,
+	}
+	if settings.YtDLPCookieJar != "" {
+		args = append(args, "--cookies", settings.YtDLPCookieJar)
+	}
+	if settings.YtDLPAudio {
+		args = append(args, "-x", "--audio-format", "mp3", "--audio-quality", "0")
+	} else {
+		args = append(args, "--merge-output-format", "mp4")
+	}
+	return append(args, settings.YtDLPURL)
+}
+
+func resolveYtDLPOutputPath(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err == nil {
+		return filePath, nil
+	}
+
+	extension := filepath.Ext(filePath)
+	base := strings.TrimSuffix(filePath, extension)
+	matches, err := filepath.Glob(base + ".*")
+	if err != nil {
+		return "", err
+	}
+	for _, match := range matches {
+		if strings.HasSuffix(match, ".part") ||
+			strings.HasSuffix(match, ".ytdl") ||
+			strings.HasSuffix(match, ".temp") {
+			continue
+		}
+		return match, nil
+	}
+
+	return "", fmt.Errorf("yt-dlp output file not found: %s", filePath)
 }
 
 func DownloadFileWithSegments(

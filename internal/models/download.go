@@ -11,4 +11,8 @@ type DownloadSettings struct {
 	Retries        int
 	SkipRemux      bool
 	SkipThumbnail  bool
+	YtDLPURL       string
+	YtDLPFormat    string
+	YtDLPCookieJar string
+	YtDLPAudio     bool
 }

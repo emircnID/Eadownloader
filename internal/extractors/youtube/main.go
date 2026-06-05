@@ -12,19 +12,17 @@ import (
 
 	"eadownloader/internal/database"
 	"eadownloader/internal/models"
-	"eadownloader/internal/plugins"
 	"eadownloader/internal/util"
 
 	"github.com/bytedance/sonic"
 )
 
 const (
-	formatBest  = "best"
-	format360   = "360"
-	format720   = "720"
-	format1080  = "1080"
-	formatAudio = "audio"
-	formatMP3   = "mp3"
+	formatBest = "best"
+	format360  = "360"
+	format720  = "720"
+	format1080 = "1080"
+	formatMP3  = "mp3"
 )
 
 var qualityTargets = []int32{360, 720, 1080}
@@ -96,30 +94,23 @@ func BuildMedia(ctx *models.ExtractorContext, info *Info) (*models.Media, error)
 
 	item := media.NewItem()
 
-	mergeAudioFormat := bestMergeAudioFormat(info)
 	audioFormat := bestAudioFormat(info)
 	for _, target := range qualityTargets {
 		format := bestVideoFormat(info, target)
 		if format == nil {
 			continue
 		}
-		if !hasAudio(format) && mergeAudioFormat == nil {
-			continue
-		}
 		mediaFormat := videoMediaFormat(info, format, target)
 		item.AddFormats(mediaFormat)
 	}
 
-	if mergeAudioFormat != nil {
-		item.AddFormats(mergeAudioMediaFormat(info, mergeAudioFormat))
-	}
 	if audioFormat != nil {
 		item.AddFormats(mp3AudioMediaFormat(info, audioFormat))
 	}
 
 	if IsShortsURL(ctx.ContentURL) {
 		format := bestAvailableVideoFormat(info)
-		if format != nil && (hasAudio(format) || mergeAudioFormat != nil) {
+		if format != nil {
 			item.AddFormats(videoMediaFormatWithID(info, format, formatBest))
 		}
 	}
@@ -190,7 +181,6 @@ func SelectBestVideoMedia(media *models.Media) (*models.Media, error) {
 }
 
 func selectMediaFormat(media *models.Media, selected *models.MediaFormat) (*models.Media, error) {
-	item := media.Items[0]
 	selectedMedia := &models.Media{
 		ContentID:   media.ContentID + "/" + selected.FormatID,
 		ContentURL:  media.ContentURL,
@@ -200,12 +190,6 @@ func selectMediaFormat(media *models.Media, selected *models.MediaFormat) (*mode
 	}
 	selectedItem := selectedMedia.NewItem()
 	selectedItem.AddFormats(cloneFormat(selected))
-
-	if selected.Type == database.MediaTypeVideo && selected.AudioCodec == "" {
-		if audio := item.GetFormatByID(formatAudio); audio != nil {
-			selectedItem.AddFormats(cloneFormat(audio))
-		}
-	}
 
 	return selectedMedia, nil
 }
@@ -267,7 +251,7 @@ func bestVideoFormat(info *Info, target int32) *Format {
 	candidates := make([]*Format, 0, len(info.Formats))
 	for i := range info.Formats {
 		format := &info.Formats[i]
-		if !isDownloadable(format) || !hasVideo(format) {
+		if !hasVideo(format) {
 			continue
 		}
 		if qualityHeight(format) != target {
@@ -308,7 +292,7 @@ func bestAvailableVideoFormat(info *Info) *Format {
 	candidates := make([]*Format, 0, len(info.Formats))
 	for i := range info.Formats {
 		format := &info.Formats[i]
-		if !isDownloadable(format) || !hasVideo(format) {
+		if !hasVideo(format) {
 			continue
 		}
 		if util.ParseVideoCodec(format.VideoCodec) != database.MediaCodecAvc {
@@ -346,7 +330,7 @@ func bestAudioFormat(info *Info) *Format {
 	candidates := make([]*Format, 0, len(info.Formats))
 	for i := range info.Formats {
 		format := &info.Formats[i]
-		if !isDownloadable(format) || hasVideo(format) || !hasAudio(format) {
+		if hasVideo(format) || !hasAudio(format) {
 			continue
 		}
 		audioCodec := util.ParseAudioCodec(format.AudioCodec)
@@ -378,33 +362,6 @@ func bestAudioFormat(info *Info) *Format {
 	return candidates[0]
 }
 
-func bestMergeAudioFormat(info *Info) *Format {
-	candidates := make([]*Format, 0, len(info.Formats))
-	for i := range info.Formats {
-		format := &info.Formats[i]
-		if !isDownloadable(format) || hasVideo(format) || !hasAudio(format) {
-			continue
-		}
-		if util.ParseAudioCodec(format.AudioCodec) != database.MediaCodecAac {
-			continue
-		}
-		candidates = append(candidates, format)
-	}
-	if len(candidates) == 0 {
-		return nil
-	}
-	slices.SortFunc(candidates, func(a, b *Format) int {
-		if a.TBR > b.TBR {
-			return -1
-		}
-		if a.TBR < b.TBR {
-			return 1
-		}
-		return 0
-	})
-	return candidates[0]
-}
-
 func videoMediaFormat(info *Info, format *Format, target int32) *models.MediaFormat {
 	return videoMediaFormatWithID(info, format, fmt.Sprintf("%d", target))
 }
@@ -414,31 +371,14 @@ func videoMediaFormatWithID(info *Info, format *Format, formatID string) *models
 		FormatID:         formatID,
 		Type:             database.MediaTypeVideo,
 		VideoCodec:       util.ParseVideoCodec(format.VideoCodec),
-		AudioCodec:       audioCodec(format),
-		URL:              []string{format.URL},
+		AudioCodec:       database.MediaCodecAac,
 		ThumbnailURL:     thumbnailURL(info),
 		Width:            format.Width,
 		Height:           format.Height,
 		Duration:         int32(info.Duration),
 		Bitrate:          int64(format.TBR * 1000),
 		FileSize:         fileSize(format),
-		DownloadSettings: youtubeDownloadSettings(),
-	}
-}
-
-func mergeAudioMediaFormat(info *Info, format *Format) *models.MediaFormat {
-	return &models.MediaFormat{
-		FormatID:         formatAudio,
-		Type:             database.MediaTypeAudio,
-		AudioCodec:       util.ParseAudioCodec(format.AudioCodec),
-		URL:              []string{format.URL},
-		ThumbnailURL:     thumbnailURL(info),
-		Duration:         int32(info.Duration),
-		Title:            info.Title,
-		Artist:           info.Uploader,
-		Bitrate:          int64(format.TBR * 1000),
-		FileSize:         fileSize(format),
-		DownloadSettings: youtubeDownloadSettings(),
+		DownloadSettings: youtubeVideoDownloadSettings(info.WebpageURL, formatID),
 	}
 }
 
@@ -447,15 +387,13 @@ func mp3AudioMediaFormat(info *Info, format *Format) *models.MediaFormat {
 		FormatID:         formatMP3,
 		Type:             database.MediaTypeAudio,
 		AudioCodec:       database.MediaCodecMp3,
-		URL:              []string{format.URL},
 		ThumbnailURL:     thumbnailURL(info),
 		Duration:         int32(info.Duration),
 		Title:            info.Title,
 		Artist:           info.Uploader,
 		Bitrate:          0,
 		FileSize:         fileSize(format),
-		DownloadSettings: youtubeDownloadSettings(),
-		Plugins:          []*models.Plugin{plugins.ConvertAudioToMP3},
+		DownloadSettings: youtubeAudioDownloadSettings(info.WebpageURL),
 	}
 }
 
@@ -465,13 +403,6 @@ func cloneFormat(format *models.MediaFormat) *models.MediaFormat {
 	clone.ThumbnailURL = slices.Clone(format.ThumbnailURL)
 	clone.Plugins = slices.Clone(format.Plugins)
 	return &clone
-}
-
-func audioCodec(format *Format) database.MediaCodec {
-	if !hasAudio(format) {
-		return ""
-	}
-	return util.ParseAudioCodec(format.AudioCodec)
 }
 
 func thumbnailURL(info *Info) []string {
@@ -488,14 +419,43 @@ func downloadHeaders() map[string]string {
 	}
 }
 
-func youtubeDownloadSettings() *models.DownloadSettings {
+func youtubeVideoDownloadSettings(contentURL string, formatID string) *models.DownloadSettings {
+	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(formatID))
+	return settings
+}
+
+func youtubeAudioDownloadSettings(contentURL string) *models.DownloadSettings {
+	settings := youtubeDownloadSettings(contentURL, "bestaudio/best")
+	settings.YtDLPAudio = true
+	return settings
+}
+
+func youtubeDownloadSettings(contentURL string, formatSelector string) *models.DownloadSettings {
 	return &models.DownloadSettings{
 		Headers:        downloadHeaders(),
 		NumConnections: 8,
 		Retries:        3,
 		SkipRemux:      true,
 		SkipThumbnail:  true,
+		YtDLPURL:       contentURL,
+		YtDLPFormat:    formatSelector,
+		YtDLPCookieJar: youtubeCookiePath(),
 	}
+}
+
+func youtubeVideoSelector(formatID string) string {
+	target := formatTarget(formatID)
+	if target == 0 {
+		target = 1080
+	}
+	return fmt.Sprintf(
+		"bestvideo[height<=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+
+			"bestvideo[height<=%d][ext=mp4]+bestaudio/best[height<=%d][ext=mp4]/best[height<=%d]",
+		target,
+		target,
+		target,
+		target,
+	)
 }
 
 func fileSize(format *Format) int64 {
@@ -510,13 +470,6 @@ func qualityHeight(format *Format) int32 {
 		return format.Width
 	}
 	return format.Height
-}
-
-func isDownloadable(format *Format) bool {
-	if format.URL == "" {
-		return false
-	}
-	return strings.HasPrefix(format.Protocol, "http")
 }
 
 func hasVideo(format *Format) bool {

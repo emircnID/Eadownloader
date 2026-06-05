@@ -66,7 +66,7 @@ func SendFormats(
 	}
 
 	for _, chunk := range mediaGroupChunks {
-		extractorCtx.Progress("Telegram'a yukleniyor...")
+		extractorCtx.Progress(uploadProgressMessage(chunk))
 		if len(chunk) == 1 {
 			util.SendMediaAction(bot, chatID, chunk[0].Format.Type)
 			msg, err := sendSingleFormat(
@@ -184,6 +184,35 @@ func chunkFormatsForUpload(formats []*models.DownloadedFormat) ([][]*models.Down
 	}
 
 	return chunks, nil
+}
+
+func uploadProgressMessage(chunk []*models.DownloadedFormat) string {
+	var totalSize int64
+	for _, format := range chunk {
+		totalSize += format.Format.FileSize
+	}
+	if totalSize <= 0 {
+		return "Telegram'a yukleniyor..."
+	}
+	return fmt.Sprintf("Telegram'a yukleniyor... (%s)", formatBytes(totalSize))
+}
+
+func formatBytes(bytes int64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/gb)
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/mb)
+	case bytes >= kb:
+		return fmt.Sprintf("%.0f KB", float64(bytes)/kb)
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
 }
 
 func uploadSize(format *models.DownloadedFormat) (int64, error) {

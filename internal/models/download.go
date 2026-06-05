@@ -13,6 +13,8 @@ type DownloadSettings struct {
 	SkipThumbnail  bool
 	YtDLPURL       string
 	YtDLPFormat    string
+	YtDLPSort      string
 	YtDLPCookieJar string
+	YtDLPArgs      string
 	YtDLPAudio     bool
 }

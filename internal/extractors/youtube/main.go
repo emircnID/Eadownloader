@@ -277,13 +277,7 @@ func bestVideoFormat(info *Info, target int32) *Format {
 			}
 			return 1
 		}
-		if a.TBR > b.TBR {
-			return -1
-		}
-		if a.TBR < b.TBR {
-			return 1
-		}
-		return 0
+		return compareSmallerVideo(a, b)
 	})
 	return candidates[0]
 }
@@ -315,13 +309,7 @@ func bestAvailableVideoFormat(info *Info) *Format {
 			}
 			return 1
 		}
-		if a.TBR > b.TBR {
-			return -1
-		}
-		if a.TBR < b.TBR {
-			return 1
-		}
-		return 0
+		return compareSmallerVideo(a, b)
 	})
 	return candidates[0]
 }
@@ -420,7 +408,12 @@ func downloadHeaders() map[string]string {
 }
 
 func youtubeVideoDownloadSettings(contentURL string, formatID string) *models.DownloadSettings {
-	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(formatID))
+	target := formatTarget(formatID)
+	if target == 0 {
+		target = 1080
+	}
+	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(target))
+	settings.YtDLPSort = youtubeVideoSort(target)
 	return settings
 }
 
@@ -433,24 +426,22 @@ func youtubeAudioDownloadSettings(contentURL string) *models.DownloadSettings {
 func youtubeDownloadSettings(contentURL string, formatSelector string) *models.DownloadSettings {
 	return &models.DownloadSettings{
 		Headers:        downloadHeaders(),
-		NumConnections: 8,
+		NumConnections: 16,
 		Retries:        3,
 		SkipRemux:      true,
 		SkipThumbnail:  true,
 		YtDLPURL:       contentURL,
 		YtDLPFormat:    formatSelector,
 		YtDLPCookieJar: youtubeCookiePath(),
+		YtDLPArgs:      "youtube:player_client=tv,web_embedded,android;formats=missing_pot",
 	}
 }
 
-func youtubeVideoSelector(formatID string) string {
-	target := formatTarget(formatID)
-	if target == 0 {
-		target = 1080
-	}
+func youtubeVideoSelector(target int32) string {
 	return fmt.Sprintf(
-		"bestvideo[height<=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+
-			"bestvideo[height<=%d][ext=mp4]+bestaudio/best[height<=%d][ext=mp4]/best[height<=%d]",
+		"bestvideo[height=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+
+			"bestvideo[height<=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+
+			"best[height<=%d][ext=mp4]/best[height<=%d]",
 		target,
 		target,
 		target,
@@ -458,11 +449,39 @@ func youtubeVideoSelector(formatID string) string {
 	)
 }
 
+func youtubeVideoSort(target int32) string {
+	return fmt.Sprintf("res:%d,+size,+br,+fps,+codec:h264:m4a", target)
+}
+
 func fileSize(format *Format) int64 {
 	if format.Filesize > 0 {
 		return format.Filesize
 	}
 	return format.FilesizeApprox
+}
+
+func compareSmallerVideo(left, right *Format) int {
+	leftSize := fileSize(left)
+	rightSize := fileSize(right)
+	if leftSize > 0 && rightSize > 0 && leftSize != rightSize {
+		if leftSize < rightSize {
+			return -1
+		}
+		return 1
+	}
+	if leftSize > 0 && rightSize == 0 {
+		return -1
+	}
+	if leftSize == 0 && rightSize > 0 {
+		return 1
+	}
+	if left.TBR < right.TBR {
+		return -1
+	}
+	if left.TBR > right.TBR {
+		return 1
+	}
+	return 0
 }
 
 func qualityHeight(format *Format) int32 {

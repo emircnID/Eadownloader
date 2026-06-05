@@ -7,6 +7,7 @@ import (
 
 	"eadownloader/internal/core"
 	"eadownloader/internal/extractors/youtube"
+	"eadownloader/internal/logger"
 	"eadownloader/internal/models"
 	"eadownloader/internal/util"
 
@@ -106,6 +107,7 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	})
 	progress := youtubeProgressReporter(bot, ctx)
 	task.ExtractorCtx.ProgressFunc = progress
+	task.ExtractorCtx.SkipQueue = true
 	progress("Format bilgisi aliniyor...")
 
 	media, err := youtube.GetMedia(task.ExtractorCtx)
@@ -145,13 +147,15 @@ func youtubeProgressReporter(bot *gotgbot.Bot, ctx *ext.Context) func(string) {
 			return
 		}
 		lastMessage = message
-		ctx.EffectiveMessage.EditText(
+		if _, _, err := ctx.EffectiveMessage.EditText(
 			bot,
 			message,
 			&gotgbot.EditMessageTextOpts{
 				ReplyMarkup: gotgbot.InlineKeyboardMarkup{},
 			},
-		)
+		); err != nil {
+			logger.L.Warnf("failed to update youtube progress message: %v", err)
+		}
 	}
 }
 

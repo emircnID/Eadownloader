@@ -491,9 +491,10 @@ func downloadHeaders() map[string]string {
 func youtubeDownloadSettings() *models.DownloadSettings {
 	return &models.DownloadSettings{
 		Headers:        downloadHeaders(),
-		NumConnections: 4,
+		NumConnections: 8,
 		Retries:        3,
 		SkipRemux:      true,
+		SkipThumbnail:  true,
 	}
 }
 
@@ -532,7 +533,7 @@ func ytDLPInfoArgs(contentURL string) [][]string {
 		"--no-playlist",
 		"--no-warnings",
 		"--force-ipv4",
-		"--sleep-requests", "1",
+		"--socket-timeout", "15",
 	}
 	if cookiePath := youtubeCookiePath(); cookiePath != "" {
 		base = append(base, "--cookies", cookiePath)

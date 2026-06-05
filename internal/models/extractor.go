@@ -44,6 +44,7 @@ type ExtractorContext struct {
 	// allows plugins to download additional formats
 	DownloadFunc func(*ExtractorContext, int, *MediaFormat) (*DownloadedFormat, error)
 	ProgressFunc func(string)
+	SkipQueue    bool
 }
 
 func (e *ExtractorContext) Debugf(format string, args ...interface{}) {

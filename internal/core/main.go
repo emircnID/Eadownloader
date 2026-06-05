@@ -61,12 +61,10 @@ func HandlePreparedDownloadTask(
 ) error {
 	key := extractorCtx.Extractor.ID + "/" + media.ContentID
 
-	acquireQueue(key)
-	defer releaseQueue(key)
-
 	if cache && config.Env.Caching {
 		taskResult, err := taskFromDatabaseByContentID(extractorCtx, media.ContentID)
 		if err == nil {
+			extractorCtx.Progress("Cache bulundu, Telegram'a yukleniyor...")
 			caption := formatCaption(
 				taskResult.Media,
 				bot.Username,
@@ -85,6 +83,37 @@ func HandlePreparedDownloadTask(
 			return err
 		}
 	}
+
+	if !extractorCtx.SkipQueue {
+		extractorCtx.Progress("Sira kontrol ediliyor...")
+		acquireQueue(key)
+		defer releaseQueue(key)
+
+		if cache && config.Env.Caching {
+			taskResult, err := taskFromDatabaseByContentID(extractorCtx, media.ContentID)
+			if err == nil {
+				extractorCtx.Progress("Cache bulundu, Telegram'a yukleniyor...")
+				caption := formatCaption(
+					taskResult.Media,
+					bot.Username,
+					extractorCtx.Chat.Captions,
+				)
+
+				_, err = SendFormats(
+					bot, ctx, extractorCtx,
+					taskResult.Media, taskResult.Formats,
+					&models.SendFormatsOptions{
+						Caption:   caption,
+						IsSpoiler: isSpoiler,
+						IsStored:  true,
+					},
+				)
+				return err
+			}
+		}
+	}
+
+	extractorCtx.Progress("Indirme basliyor...")
 
 	formats, err := downloadMediaFormats(extractorCtx, media)
 	if err != nil {

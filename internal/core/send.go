@@ -2,14 +2,16 @@ package core
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 
-	"github.com/PaulSonOfLars/gotgbot/v2"
-	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"eadownloader/internal/config"
 	"eadownloader/internal/database"
 	"eadownloader/internal/models"
 	"eadownloader/internal/util"
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 )
 
 func SendFormats(
@@ -58,9 +60,31 @@ func SendFormats(
 
 	var sentMessages []gotgbot.Message
 
-	mediaGroupChunks := slices.Collect(slices.Chunk(formats, 10))
+	mediaGroupChunks, err := chunkFormatsForUpload(formats)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, chunk := range mediaGroupChunks {
+		if len(chunk) == 1 {
+			util.SendMediaAction(bot, chatID, chunk[0].Format.Type)
+			msg, err := sendSingleFormat(
+				bot, chatID,
+				chunk[0],
+				options.Caption,
+				options.IsSpoiler,
+				messageOptions,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to send media: %w", err)
+			}
+			if options.Delete {
+				go msg.Delete(bot, nil)
+			}
+			sentMessages = append(sentMessages, *msg)
+			continue
+		}
+
 		var inputMediaList []gotgbot.InputMedia
 		for i, f := range chunk {
 			var caption string
@@ -121,6 +145,163 @@ func SendFormats(
 		}
 	}
 	return sentMessages, nil
+}
+
+func chunkFormatsForUpload(formats []*models.DownloadedFormat) ([][]*models.DownloadedFormat, error) {
+	if !util.IsOfficialTelegramAPI() {
+		return slices.Collect(slices.Chunk(formats, 10)), nil
+	}
+
+	const multipartLimit = 50 * 1024 * 1024
+
+	var chunks [][]*models.DownloadedFormat
+	var chunk []*models.DownloadedFormat
+	var chunkSize int64
+
+	for _, format := range formats {
+		size, err := uploadSize(format)
+		if err != nil {
+			return nil, err
+		}
+		if size > multipartLimit {
+			return nil, util.ErrTelegramFileTooLarge
+		}
+
+		if len(chunk) > 0 &&
+			(len(chunk) == 10 || chunkSize+size > multipartLimit) {
+			chunks = append(chunks, chunk)
+			chunk = nil
+			chunkSize = 0
+		}
+
+		chunk = append(chunk, format)
+		chunkSize += size
+	}
+
+	if len(chunk) > 0 {
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks, nil
+}
+
+func uploadSize(format *models.DownloadedFormat) (int64, error) {
+	if format.Format.FileID != "" {
+		return 0, nil
+	}
+	if format.Format.FileSize > 0 {
+		return format.Format.FileSize, nil
+	}
+	if format.FilePath == "" {
+		return 0, nil
+	}
+	info, err := os.Stat(format.FilePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to stat upload file: %w", err)
+	}
+	format.Format.FileSize = info.Size()
+	return info.Size(), nil
+}
+
+func sendSingleFormat(
+	bot *gotgbot.Bot,
+	chatID int64,
+	format *models.DownloadedFormat,
+	caption string,
+	spoiler bool,
+	messageOptions *gotgbot.SendMediaGroupOpts,
+) (*gotgbot.Message, error) {
+	media, mediaFile, err := inputFileOrID(format.Format.FileID, format.FilePath)
+	if err != nil {
+		return nil, err
+	}
+	if mediaFile != nil {
+		defer mediaFile.Close()
+	}
+
+	thumbnail, thumbnailFile, err := inputFile(format.ThumbnailFilePath)
+	if err != nil {
+		return nil, err
+	}
+	if thumbnailFile != nil {
+		defer thumbnailFile.Close()
+	}
+
+	_, fileType := format.Format.GetInfo()
+	switch fileType {
+	case models.FileTypeVideo:
+		return bot.SendVideo(chatID, media, &gotgbot.SendVideoOpts{
+			Thumbnail:           thumbnail,
+			Width:               int64(format.Format.Width),
+			Height:              int64(format.Format.Height),
+			Duration:            int64(format.Format.Duration),
+			Caption:             caption,
+			ParseMode:           gotgbot.ParseModeHTML,
+			HasSpoiler:          spoiler,
+			SupportsStreaming:   true,
+			DisableNotification: disableNotification(messageOptions),
+			ReplyParameters:     replyParameters(messageOptions),
+		})
+	case models.FileTypeAudio:
+		return bot.SendAudio(chatID, media, &gotgbot.SendAudioOpts{
+			Thumbnail:           thumbnail,
+			Duration:            int64(format.Format.Duration),
+			Performer:           format.Format.Artist,
+			Title:               format.Format.Title,
+			Caption:             caption,
+			ParseMode:           gotgbot.ParseModeHTML,
+			DisableNotification: disableNotification(messageOptions),
+			ReplyParameters:     replyParameters(messageOptions),
+		})
+	case models.FileTypePhoto:
+		return bot.SendPhoto(chatID, media, &gotgbot.SendPhotoOpts{
+			Caption:             caption,
+			ParseMode:           gotgbot.ParseModeHTML,
+			HasSpoiler:          spoiler,
+			DisableNotification: disableNotification(messageOptions),
+			ReplyParameters:     replyParameters(messageOptions),
+		})
+	case models.FileTypeDocument:
+		return bot.SendDocument(chatID, media, &gotgbot.SendDocumentOpts{
+			Thumbnail:           thumbnail,
+			Caption:             caption,
+			ParseMode:           gotgbot.ParseModeHTML,
+			DisableNotification: disableNotification(messageOptions),
+			ReplyParameters:     replyParameters(messageOptions),
+		})
+	default:
+		return nil, fmt.Errorf("unknown input type: %s", fileType)
+	}
+}
+
+func inputFileOrID(fileID string, filePath string) (gotgbot.InputFileOrString, *os.File, error) {
+	if fileID != "" {
+		return gotgbot.InputFileByID(fileID), nil, nil
+	}
+	input, file, err := inputFile(filePath)
+	return input, file, err
+}
+
+func inputFile(filePath string) (gotgbot.InputFile, *os.File, error) {
+	if filePath == "" {
+		return nil, nil, nil
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	return gotgbot.InputFileByReader(filepath.Base(filePath), file), file, nil
+}
+
+func disableNotification(options *gotgbot.SendMediaGroupOpts) bool {
+	return options != nil && options.DisableNotification
+}
+
+func replyParameters(options *gotgbot.SendMediaGroupOpts) *gotgbot.ReplyParameters {
+	if options == nil {
+		return nil
+	}
+	return options.ReplyParameters
 }
 
 func SendInlineFormats(

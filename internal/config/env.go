@@ -24,7 +24,7 @@ func loadFromEnv() {
 	parseEnvString("DOWNLOADS_DIR", &Env.DownloadsDirectory, false)
 	parseEnvString("PROXY", &Env.Proxy, false)
 	parseEnvDuration("MAX_DURATION", &Env.MaxDuration, false)
-	parseEnvMegabytes("MAX_FILE_SIZE", &Env.MaxFileSize, false)
+	parseEnvFileSize("MAX_FILE_SIZE", &Env.MaxFileSize, false)
 	parseEnvString("REPO_URL", &Env.RepoURL, false)
 	parseEnvInt("PROFILER_PORT", &Env.ProfilerPort, false)
 	parseEnvInt("METRICS_PORT", &Env.MetricsPort, false)
@@ -41,6 +41,7 @@ func loadFromEnv() {
 	parseEnvLanguage("DEFAULT_LANGUAGE", &Env.DefaultLanguage, false)
 	parseEnvBool("DEFAULT_DELETE_LINKS", &Env.DefaultDeleteLinks, false)
 	parseEnvBool("AUTOMATIC_LANGUAGE_DETECTION", &Env.AutomaticLanguageDetection, false)
+	parseEnvString("COBALT_API_URL", &Env.CobaltAPIURL, false)
 }
 
 func GetDefaultConfig() *EnvConfig {

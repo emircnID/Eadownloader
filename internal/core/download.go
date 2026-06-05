@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"eadownloader/internal/database"
@@ -157,6 +158,12 @@ func downloadFormat(
 		}
 		format.Width = bounds.W
 		format.Height = bounds.H
+		if err := setDownloadedFileSize(format, filePath); err != nil {
+			return nil, err
+		}
+		if err := validateFormat(format); err != nil {
+			return nil, err
+		}
 
 		return &models.DownloadedFormat{
 			Format:   format,
@@ -186,6 +193,13 @@ func downloadFormat(
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to download file: %w", err)
+	}
+
+	if err := setDownloadedFileSize(format, filePath); err != nil {
+		return nil, err
+	}
+	if err := validateFormat(format); err != nil {
+		return nil, err
 	}
 
 	thumbnailFilePath, err = getThumbnail(ctx, format, filePath)
@@ -230,4 +244,13 @@ func collectDownloadedFormats(
 	}
 
 	return downloadedFormats, firstErr
+}
+
+func setDownloadedFileSize(format *models.MediaFormat, filePath string) error {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to stat downloaded file: %w", err)
+	}
+	format.FileSize = info.Size()
+	return nil
 }

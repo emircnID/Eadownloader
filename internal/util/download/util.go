@@ -9,9 +9,11 @@ import (
 	"eadownloader/internal/models"
 )
 
+const maxInMemoryDownloadSize = 50 * 1024 * 1024
+
 func defaultSettings() *models.DownloadSettings {
 	return &models.DownloadSettings{
-		NumConnections: 4,
+		NumConnections: 2,
 		ChunkSize:      5 * 1024 * 1024, // 5 MB
 		Retries:        3,
 	}

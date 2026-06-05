@@ -9,12 +9,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	"eadownloader/internal/models"
 	"eadownloader/internal/networking"
 	"eadownloader/internal/util/download/chunked"
+	"eadownloader/internal/util/download/retry"
 	"eadownloader/internal/util/download/segmented"
 	"eadownloader/internal/util/libav"
+	"github.com/google/uuid"
 )
 
 func DownloadFile(
@@ -43,10 +44,12 @@ func DownloadFile(
 	var lastErr error
 	for _, url := range urlList {
 		ctx.Debugf("attempting download from: %s", url)
+		if err := resetFile(file); err != nil {
+			return "", err
+		}
 
 		cd, err := chunked.New(ctx.Context, client, url, settings)
 		if err != nil {
-			// ranged requests not supported, fallback to sequential download
 			err = downloadSequential(ctx, client, url, file, settings)
 			if err != nil {
 				lastErr = err
@@ -78,6 +81,9 @@ func DownloadFile(
 		return filePath, nil
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no URLs to download")
+	}
 	return "", lastErr
 }
 
@@ -158,6 +164,7 @@ func DownloadFileInMemory(
 
 	client := ctx.HTTPClient.AsDownloadClient()
 	maxRetries := max(settings.Retries, 1)
+	var lastErr error
 
 	for _, url := range urlList {
 		for attempt := range maxRetries {
@@ -171,10 +178,28 @@ func DownloadFileInMemory(
 				},
 			)
 			if err != nil {
+				lastErr = err
+				if waitErr := retry.Sleep(ctx.Context, attempt, nil); waitErr != nil {
+					return nil, waitErr
+				}
 				continue
 			}
 
 			if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+				headers := resp.Header
+				resp.Body.Close()
+				if retry.IsStatus(resp.StatusCode) {
+					if waitErr := retry.Sleep(ctx.Context, attempt, headers); waitErr != nil {
+						return nil, waitErr
+					}
+					continue
+				}
+				break
+			}
+
+			if resp.ContentLength > 0 && resp.ContentLength > maxInMemoryDownloadSize {
+				lastErr = fmt.Errorf("file too large to download in memory: %d bytes", resp.ContentLength)
 				resp.Body.Close()
 				continue
 			}
@@ -182,6 +207,10 @@ func DownloadFileInMemory(
 			data, err := io.ReadAll(resp.Body)
 			if err != nil {
 				resp.Body.Close()
+				lastErr = err
+				if waitErr := retry.Sleep(ctx.Context, attempt, nil); waitErr != nil {
+					return nil, waitErr
+				}
 				continue
 			}
 
@@ -190,39 +219,77 @@ func DownloadFileInMemory(
 		}
 	}
 
-	return nil, fmt.Errorf("all download attempts failed")
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no URLs to download")
+	}
+	return nil, fmt.Errorf("all download attempts failed: %w", lastErr)
 }
 
 func downloadSequential(
 	ctx *models.ExtractorContext,
 	client *networking.HTTPClient,
 	url string,
-	writer io.Writer,
+	file *os.File,
 	settings *models.DownloadSettings,
 ) error {
 	settings = ensureDownloadSettings(settings)
+	maxRetries := max(settings.Retries, 1)
+	var lastErr error
 
-	resp, err := client.FetchWithContext(
-		ctx.Context,
-		http.MethodGet, url,
-		&networking.RequestParams{
-			Headers: settings.Headers,
-			Cookies: settings.Cookies,
-		},
-	)
-	if err != nil {
+	for attempt := range maxRetries {
+		if err := resetFile(file); err != nil {
+			return err
+		}
+
+		resp, err := client.FetchWithContext(
+			ctx.Context,
+			http.MethodGet, url,
+			&networking.RequestParams{
+				Headers: settings.Headers,
+				Cookies: settings.Cookies,
+			},
+		)
+		if err != nil {
+			lastErr = err
+			if waitErr := retry.Sleep(ctx.Context, attempt, nil); waitErr != nil {
+				return waitErr
+			}
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+			headers := resp.Header
+			resp.Body.Close()
+			if retry.IsStatus(resp.StatusCode) {
+				if waitErr := retry.Sleep(ctx.Context, attempt, headers); waitErr != nil {
+					return waitErr
+				}
+				continue
+			}
+			return lastErr
+		}
+
+		_, err = io.Copy(file, resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			if waitErr := retry.Sleep(ctx.Context, attempt, nil); waitErr != nil {
+				return waitErr
+			}
+			continue
+		}
+
+		return nil
+	}
+
+	return lastErr
+}
+
+func resetFile(file *os.File) error {
+	if err := file.Truncate(0); err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	_, err = io.Copy(writer, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err := file.Seek(0, io.SeekStart)
+	return err
 }

@@ -55,6 +55,56 @@ func parseEnvMegabytes(env string, dest *int64, required bool) {
 	}
 }
 
+func parseEnvFileSize(env string, dest *int64, required bool) {
+	if value := os.Getenv(env); value != "" {
+		parsed, err := parseFileSize(value)
+		if err != nil {
+			logger.L.Fatalf("%s env is not a valid file size: %v", env, err)
+		}
+		*dest = parsed
+	} else if required {
+		logger.L.Fatalf("%s env is not set", env)
+	}
+}
+
+func parseFileSize(value string) (int64, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.ReplaceAll(value, " ", "")
+
+	units := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"gb", 1024 * 1024 * 1024},
+		{"mb", 1024 * 1024},
+		{"kb", 1024},
+		{"g", 1024 * 1024 * 1024},
+		{"m", 1024 * 1024},
+		{"k", 1024},
+		{"b", 1},
+	}
+
+	for _, unit := range units {
+		if strings.HasSuffix(value, unit.suffix) {
+			numeric := strings.TrimSuffix(value, unit.suffix)
+			parsed, err := strconv.ParseInt(numeric, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return parsed * unit.multiplier, nil
+		}
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if parsed < 1024*1024 {
+		return parsed * 1024 * 1024, nil
+	}
+	return parsed, nil
+}
+
 func parseEnvDuration(env string, dest *time.Duration, required bool) {
 	if value := os.Getenv(env); value != "" {
 		if parsed, err := time.ParseDuration(value); err == nil {

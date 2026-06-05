@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"eadownloader/internal/database"
+	"eadownloader/internal/extractors/cobalt"
 	"eadownloader/internal/models"
 	"eadownloader/internal/util"
 )
@@ -79,7 +80,11 @@ func GetMedia(ctx *models.ExtractorContext) (*models.Media, error) {
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get from web: %w", err)
+		media, cobaltErr := GetMediaFromCobalt(ctx)
+		if cobaltErr == nil {
+			return media, nil
+		}
+		return nil, fmt.Errorf("failed to get from web: %w; cobalt fallback failed: %w", err, cobaltErr)
 	}
 
 	media := ctx.NewMedia()
@@ -119,4 +124,54 @@ func GetMedia(ctx *models.ExtractorContext) (*models.Media, error) {
 		}
 		return media, nil
 	}
+}
+
+func GetMediaFromCobalt(ctx *models.ExtractorContext) (*models.Media, error) {
+	response, err := cobalt.GetMedia(ctx.ContentURL)
+	if err != nil {
+		return nil, err
+	}
+
+	media := ctx.NewMedia()
+
+	if response.URL != "" {
+		item := media.NewItem()
+		item.AddFormats(&models.MediaFormat{
+			Type:       database.MediaTypeVideo,
+			FormatID:   "cobalt",
+			URL:        []string{response.URL},
+			VideoCodec: database.MediaCodecAvc,
+			AudioCodec: database.MediaCodecAac,
+		})
+		return media, nil
+	}
+
+	for _, picker := range response.Picker {
+		if picker.URL == "" {
+			continue
+		}
+		item := media.NewItem()
+		switch picker.Type {
+		case "photo", "image":
+			item.AddFormats(&models.MediaFormat{
+				Type:     database.MediaTypePhoto,
+				FormatID: "cobalt",
+				URL:      []string{picker.URL},
+			})
+		default:
+			item.AddFormats(&models.MediaFormat{
+				Type:         database.MediaTypeVideo,
+				FormatID:     "cobalt",
+				URL:          []string{picker.URL},
+				ThumbnailURL: []string{picker.Thumb},
+				VideoCodec:   database.MediaCodecAvc,
+				AudioCodec:   database.MediaCodecAac,
+			})
+		}
+	}
+
+	if len(media.Items) == 0 {
+		return nil, util.ErrUnavailable
+	}
+	return media, nil
 }

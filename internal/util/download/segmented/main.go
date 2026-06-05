@@ -11,6 +11,7 @@ import (
 
 	"eadownloader/internal/models"
 	"eadownloader/internal/networking"
+	"eadownloader/internal/util/download/retry"
 )
 
 type SegmentedDownloader struct {
@@ -158,13 +159,23 @@ func (sd *SegmentedDownloader) downloadSegmentToFile(
 		)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to fetch segment %q (attempt %d/%d): %w", url, attempt+1, maxRetries, err)
+			if waitErr := retry.Sleep(ctx, attempt, nil); waitErr != nil {
+				return waitErr
+			}
 			continue
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			headers := resp.Header
 			resp.Body.Close()
 			lastErr = fmt.Errorf("failed to fetch segment %q: status %d (attempt %d/%d)", url, resp.StatusCode, attempt+1, maxRetries)
-			continue
+			if retry.IsStatus(resp.StatusCode) {
+				if waitErr := retry.Sleep(ctx, attempt, headers); waitErr != nil {
+					return waitErr
+				}
+				continue
+			}
+			return lastErr
 		}
 
 		file, err := os.Create(filePath)
@@ -179,6 +190,9 @@ func (sd *SegmentedDownloader) downloadSegmentToFile(
 
 		if err != nil {
 			lastErr = fmt.Errorf("failed to write segment to file (attempt %d/%d): %w", attempt+1, maxRetries, err)
+			if waitErr := retry.Sleep(ctx, attempt, nil); waitErr != nil {
+				return waitErr
+			}
 			continue
 		}
 

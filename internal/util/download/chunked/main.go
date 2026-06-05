@@ -10,6 +10,7 @@ import (
 
 	"eadownloader/internal/models"
 	"eadownloader/internal/networking"
+	"eadownloader/internal/util/download/retry"
 )
 
 type ChunkedDownloader struct {
@@ -171,13 +172,25 @@ func (cd *ChunkedDownloader) downloadChunk(
 		)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to download chunk %d (attempt %d/%d): %w", index, attempt+1, maxRetries, err)
+			if waitErr := retry.Sleep(ctx.Context, attempt, nil); waitErr != nil {
+				chunks <- &Chunk{index: index, err: waitErr}
+				return
+			}
 			continue
 		}
 
 		if resp.StatusCode != http.StatusPartialContent {
+			headers := resp.Header
 			resp.Body.Close()
 			lastErr = fmt.Errorf("expected status 206, got %d for chunk %d (attempt %d/%d)", resp.StatusCode, index, attempt+1, maxRetries)
-			continue
+			if retry.IsStatus(resp.StatusCode) {
+				if waitErr := retry.Sleep(ctx.Context, attempt, headers); waitErr != nil {
+					chunks <- &Chunk{index: index, err: waitErr}
+					return
+				}
+				continue
+			}
+			break
 		}
 
 		chunks <- &Chunk{index: index, reader: resp.Body}

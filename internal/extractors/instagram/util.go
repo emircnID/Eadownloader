@@ -290,6 +290,9 @@ func GetGQLData(ctx *models.ExtractorContext) (*GraphQLData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build GQL data: %w", err)
 	}
+	if len(ctx.HTTPClient.Cookies) > 0 {
+		delete(graphHeaders, "cookie")
+	}
 	formData := url.Values{}
 	for key, value := range body {
 		formData.Set(key, value)

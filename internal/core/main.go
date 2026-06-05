@@ -1,12 +1,12 @@
 package core
 
 import (
-	"github.com/PaulSonOfLars/gotgbot/v2"
-	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"eadownloader/internal/config"
 	"eadownloader/internal/database"
 	"eadownloader/internal/models"
 	"eadownloader/internal/util"
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 )
 
 func HandleDownloadTask(
@@ -212,11 +212,26 @@ func checkAlbumLimit(n int, chat *database.GetOrCreateChatRow) error {
 }
 
 func validateFormat(fmt *models.MediaFormat) error {
-	if util.ExceedsMaxFileSize(fmt.FileSize) {
+	if fmt.FileSize > 0 && util.ExceedsMaxFileSize(fmt.FileSize) {
 		return util.ErrFileTooLarge
+	}
+	if fmt.FileSize > telegramUploadLimit(fmt) {
+		return util.ErrTelegramFileTooLarge
 	}
 	if util.ExceedsMaxDuration(fmt.Duration) {
 		return util.ErrDurationTooLong
 	}
 	return nil
+}
+
+func telegramUploadLimit(fmt *models.MediaFormat) int64 {
+	if !util.IsOfficialTelegramAPI() {
+		return config.Env.MaxFileSize
+	}
+
+	_, fileType := fmt.GetInfo()
+	if fileType == models.FileTypePhoto {
+		return 10 * 1024 * 1024
+	}
+	return 50 * 1024 * 1024
 }

@@ -9,6 +9,8 @@ import (
 	"eadownloader/internal/logger"
 	"go.uber.org/zap/exp/zapslog"
 
+	botHandlers "eadownloader/internal/bot/handlers"
+	botSettings "eadownloader/internal/bot/handlers/settings"
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers"
@@ -16,8 +18,6 @@ import (
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/choseninlineresult"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/inlinequery"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext/handlers/filters/message"
-	botHandlers "eadownloader/internal/bot/handlers"
-	botSettings "eadownloader/internal/bot/handlers/settings"
 )
 
 var allowedUpdates = []string{
@@ -183,8 +183,12 @@ func registerHandlers(dispatcher *ext.Dispatcher) *ext.Dispatcher {
 		botHandlers.OldMessagesHandler,
 	), -100)
 	dispatcher.AddHandler(handlers.NewCommand(
-		"stats",
-		botHandlers.StatsHandler,
+		"admin",
+		botHandlers.AdminHandler,
+	))
+	dispatcher.AddHandler(handlers.NewCallback(
+		callbackquery.Prefix("admin:"),
+		botHandlers.AdminCallbackHandler,
 	))
 	dispatcher.AddHandler(handlers.NewCallback(
 		callbackquery.Prefix("stats"),

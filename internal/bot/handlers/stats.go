@@ -280,6 +280,7 @@ func getStatsKeyboard(screen string, period string) gotgbot.InlineKeyboardMarkup
 			},
 			{
 				{Text: "Overview", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + period},
+				{Text: "Admin", CallbackData: adminCallbackPrefix + adminScreenHome},
 			},
 		},
 	}

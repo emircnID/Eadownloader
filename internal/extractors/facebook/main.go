@@ -118,7 +118,7 @@ func buildMedia(ctx *models.ExtractorContext, data *VideoData) (*models.Media, e
 		return media, nil
 	}
 
-	for _, imageURL := range data.ImageURLs {
+	for _, imageURL := range firstFacebookImage(data.ImageURLs) {
 		item := media.NewItem()
 		item.AddFormats(&models.MediaFormat{
 			FormatID: "image",
@@ -131,4 +131,11 @@ func buildMedia(ctx *models.ExtractorContext, data *VideoData) (*models.Media, e
 		return nil, fmt.Errorf("no media found")
 	}
 	return media, nil
+}
+
+func firstFacebookImage(imageURLs []string) []string {
+	if len(imageURLs) == 0 {
+		return nil
+	}
+	return imageURLs[:1]
 }

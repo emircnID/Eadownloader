@@ -157,10 +157,11 @@ func matchedImageURLs(sections ...[]byte) []string {
 				if !isFacebookImageURL(imageURL) {
 					continue
 				}
-				if _, ok := seen[imageURL]; ok {
+				key := facebookImageDedupeKey(imageURL)
+				if _, ok := seen[key]; ok {
 					continue
 				}
-				seen[imageURL] = struct{}{}
+				seen[key] = struct{}{}
 				imageURLs = append(imageURLs, imageURL)
 			}
 		}
@@ -188,6 +189,17 @@ func isFacebookImageURL(imageURL string) bool {
 	host := strings.ToLower(parsedURL.Hostname())
 	return strings.Contains(host, "fbcdn.net") ||
 		strings.Contains(host, "fbsbx.com")
+}
+
+func facebookImageDedupeKey(imageURL string) string {
+	parsedURL, err := url.Parse(imageURL)
+	if err != nil {
+		return imageURL
+	}
+	if parsedURL.Path != "" {
+		return strings.ToLower(parsedURL.Hostname()) + parsedURL.Path
+	}
+	return imageURL
 }
 
 // findVideoSection returns the slice of body containing the video delivery

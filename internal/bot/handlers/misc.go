@@ -3,10 +3,10 @@ package handlers
 import (
 	"time"
 
-	"github.com/PaulSonOfLars/gotgbot/v2"
-	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"eadownloader/internal/localization"
 	"eadownloader/internal/util"
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 )
 
 // prevents the bot from processing a large
@@ -20,6 +20,12 @@ func OldMessagesHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 }
 
 func CloseHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
+	if ctx.CallbackQuery != nil && util.IsAdminID(ctx.CallbackQuery.From.Id) {
+		ctx.CallbackQuery.Answer(bot, nil)
+		ctx.EffectiveMessage.Delete(bot, nil)
+		return nil
+	}
+
 	chat, err := util.ChatFromContext(ctx)
 	if err != nil {
 		return err

@@ -47,3 +47,19 @@ SELECT
     s.delete_links
 FROM final_chat c 
 JOIN final_settings s ON s.chat_id = c.chat_id;
+
+-- name: GetChatByID :one
+SELECT
+    c.chat_id,
+    c.type,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name,
+    s.language,
+    c.created_at,
+    c.last_seen_at
+FROM chat c
+JOIN settings s USING (chat_id)
+WHERE c.chat_id = @chat_id
+LIMIT 1;

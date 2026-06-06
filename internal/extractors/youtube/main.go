@@ -62,7 +62,7 @@ func BuildFastMedia(ctx *models.ExtractorContext) *models.Media {
 	item.AddFormats(fastAudioMediaFormat(ctx.ContentURL))
 
 	if IsShortsURL(ctx.ContentURL) {
-		item.AddFormats(fastVideoMediaFormat(ctx.ContentURL, formatBest, 1080))
+		item.AddFormats(fastVideoMediaFormat(ctx.ContentURL, formatBest, 720))
 	}
 
 	return media
@@ -447,10 +447,14 @@ func downloadHeaders() map[string]string {
 func youtubeVideoDownloadSettings(contentURL string, formatID string) *models.DownloadSettings {
 	target := formatTarget(formatID)
 	if target == 0 {
-		target = 1080
+		target = 720
 	}
-	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(target))
-	settings.YtDLPSort = youtubeVideoSort(target)
+	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(target, true))
+	if target <= 720 {
+		settings.YtDLPRemote = true
+	} else {
+		settings.YtDLPSort = youtubeVideoSort(target)
+	}
 	return settings
 }
 
@@ -474,7 +478,15 @@ func youtubeDownloadSettings(contentURL string, formatSelector string) *models.D
 	}
 }
 
-func youtubeVideoSelector(target int32) string {
+func youtubeVideoSelector(target int32, preferProgressive bool) string {
+	if preferProgressive {
+		switch target {
+		case 360:
+			return "18/best[height<=360][ext=mp4][vcodec^=avc1][acodec!=none]/best[height<=360][ext=mp4][acodec!=none]"
+		case 720:
+			return "22/18/best[height<=720][ext=mp4][vcodec^=avc1][acodec!=none]/best[height<=720][ext=mp4][acodec!=none]"
+		}
+	}
 	return fmt.Sprintf(
 		"bestvideo[height=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+
 			"bestvideo[height<=%d][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/"+

@@ -17,4 +17,5 @@ type DownloadSettings struct {
 	YtDLPCookieJar string
 	YtDLPArgs      string
 	YtDLPAudio     bool
+	YtDLPRemote    bool
 }

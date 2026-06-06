@@ -151,6 +151,35 @@ func DownloadFileWithYtDLP(
 	return resolvedPath, nil
 }
 
+func ResolveURLWithYtDLP(
+	ctx *models.ExtractorContext,
+	settings *models.DownloadSettings,
+) (string, error) {
+	settings = ensureDownloadSettings(settings)
+
+	args := ytDLPURLArgs(settings)
+	ctx.Debugf("resolving yt-dlp remote url with format: %s", settings.YtDLPFormat)
+
+	cmd := exec.CommandContext(ctx.Context, "yt-dlp", args...)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("yt-dlp url resolve failed: %w; stderr: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		url := strings.TrimSpace(line)
+		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+			return url, nil
+		}
+	}
+
+	return "", fmt.Errorf("yt-dlp returned no remote url")
+}
+
 func ytDLPDownloadArgs(filePath string, settings *models.DownloadSettings) []string {
 	concurrentFragments := fmt.Sprintf("%d", max(settings.NumConnections, 1))
 	args := []string{
@@ -179,6 +208,27 @@ func ytDLPDownloadArgs(filePath string, settings *models.DownloadSettings) []str
 		args = append(args, "-x", "--audio-format", "mp3", "--audio-quality", "0")
 	} else {
 		args = append(args, "--merge-output-format", "mp4")
+	}
+	return append(args, settings.YtDLPURL)
+}
+
+func ytDLPURLArgs(settings *models.DownloadSettings) []string {
+	args := []string{
+		"--get-url",
+		"--no-playlist",
+		"--no-warnings",
+		"--force-ipv4",
+		"--socket-timeout", "10",
+		"-f", settings.YtDLPFormat,
+	}
+	if settings.YtDLPSort != "" {
+		args = append(args, "--format-sort", settings.YtDLPSort)
+	}
+	if settings.YtDLPCookieJar != "" {
+		args = append(args, "--cookies", settings.YtDLPCookieJar)
+	}
+	if settings.YtDLPArgs != "" {
+		args = append(args, "--extractor-args", settings.YtDLPArgs)
 	}
 	return append(args, settings.YtDLPURL)
 }

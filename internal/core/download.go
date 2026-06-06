@@ -192,6 +192,17 @@ func downloadFormat(
 	// for video and audio, download to file
 	var err error
 	switch {
+	case isYtDLPRemoteDownload(format):
+		ctx.Progress("YouTube hizli link aliniyor...")
+		remoteURL, err := download.ResolveURLWithYtDLP(ctx, format.DownloadSettings)
+		if err != nil {
+			return nil, err
+		}
+		format.FileID = remoteURL
+		return &models.DownloadedFormat{
+			Format: format,
+			Index:  index,
+		}, nil
 	case isYtDLPDownload(format):
 		ctx.Progress("yt-dlp ile indiriliyor...")
 		filePath, err = download.DownloadFileWithYtDLP(
@@ -358,6 +369,10 @@ func isYtDLPDownload(format *models.MediaFormat) bool {
 	return format.DownloadSettings != nil &&
 		format.DownloadSettings.YtDLPURL != "" &&
 		format.DownloadSettings.YtDLPFormat != ""
+}
+
+func isYtDLPRemoteDownload(format *models.MediaFormat) bool {
+	return isYtDLPDownload(format) && format.DownloadSettings.YtDLPRemote
 }
 
 func collectDownloadedFormats(

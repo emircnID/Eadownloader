@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"eadownloader/internal/config"
 	"eadownloader/internal/database"
 	"eadownloader/internal/models"
 	"eadownloader/internal/util"
+	"eadownloader/internal/util/download"
 	"github.com/PaulSonOfLars/gotgbot/v2"
 	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 )
@@ -77,7 +79,24 @@ func SendFormats(
 				messageOptions,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("failed to send media: %w", err)
+				msg, retryErr := retryRemoteURLUpload(
+					bot,
+					chatID,
+					chunk[0],
+					options.Caption,
+					options.IsSpoiler,
+					messageOptions,
+					extractorCtx,
+					err,
+				)
+				if retryErr != nil {
+					return nil, fmt.Errorf("failed to send media: %w", retryErr)
+				}
+				if options.Delete {
+					go msg.Delete(bot, nil)
+				}
+				sentMessages = append(sentMessages, *msg)
+				continue
 			}
 			if options.Delete {
 				go msg.Delete(bot, nil)
@@ -185,6 +204,54 @@ func chunkFormatsForUpload(formats []*models.DownloadedFormat) ([][]*models.Down
 	}
 
 	return chunks, nil
+}
+
+func retryRemoteURLUpload(
+	bot *gotgbot.Bot,
+	chatID int64,
+	format *models.DownloadedFormat,
+	caption string,
+	spoiler bool,
+	messageOptions *gotgbot.SendMediaGroupOpts,
+	extractorCtx *models.ExtractorContext,
+	sendErr error,
+) (*gotgbot.Message, error) {
+	if !isRemoteURLFormat(format) {
+		return nil, sendErr
+	}
+
+	extractorCtx.Warnf("telegram remote url send failed, falling back to upload: %v", sendErr)
+	extractorCtx.Progress("Hizli link olmadi, dosya indiriliyor...")
+
+	settings := *format.Format.DownloadSettings
+	settings.YtDLPRemote = false
+	format.Format.DownloadSettings = &settings
+	format.Format.FileID = ""
+
+	filePath, err := download.DownloadFileWithYtDLP(
+		extractorCtx,
+		format.Format.GetFileName(),
+		format.Format.DownloadSettings,
+	)
+	if err != nil {
+		return nil, err
+	}
+	format.FilePath = filePath
+	if info, err := os.Stat(filePath); err == nil {
+		format.Format.FileSize = info.Size()
+	}
+
+	extractorCtx.Progress(uploadProgressMessage([]*models.DownloadedFormat{format}))
+	return sendSingleFormat(bot, chatID, format, caption, spoiler, messageOptions)
+}
+
+func isRemoteURLFormat(format *models.DownloadedFormat) bool {
+	return format != nil &&
+		format.Format != nil &&
+		format.Format.DownloadSettings != nil &&
+		format.Format.DownloadSettings.YtDLPRemote &&
+		(strings.HasPrefix(format.Format.FileID, "http://") ||
+			strings.HasPrefix(format.Format.FileID, "https://"))
 }
 
 func uploadProgressMessage(chunk []*models.DownloadedFormat) string {

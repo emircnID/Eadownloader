@@ -1,7 +1,6 @@
 package download
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -9,8 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"eadownloader/internal/models"
@@ -21,8 +18,6 @@ import (
 	"eadownloader/internal/util/libav"
 	"github.com/google/uuid"
 )
-
-var ytDLPProgressPattern = regexp.MustCompile(`\b(\d+(?:\.\d+)?)%`)
 
 func DownloadFile(
 	ctx *models.ExtractorContext,
@@ -113,30 +108,7 @@ func DownloadFileWithYtDLP(
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return "", err
-	}
-
-	lastProgress := -1
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		progress := ytDLPProgressBucket(scanner.Text())
-		if progress < 0 || progress == lastProgress {
-			continue
-		}
-		lastProgress = progress
-		ctx.Progress(fmt.Sprintf("YouTube indiriliyor... %d%%", progress))
-	}
-	if err := scanner.Err(); err != nil {
-		ctx.Warnf("failed to read yt-dlp progress: %v", err)
-	}
-
-	if err := cmd.Wait(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("yt-dlp download failed: %w; stderr: %s", err, strings.TrimSpace(stderr.String()))
 	}
 
@@ -149,35 +121,6 @@ func DownloadFileWithYtDLP(
 	}
 
 	return resolvedPath, nil
-}
-
-func ResolveURLWithYtDLP(
-	ctx *models.ExtractorContext,
-	settings *models.DownloadSettings,
-) (string, error) {
-	settings = ensureDownloadSettings(settings)
-
-	args := ytDLPURLArgs(settings)
-	ctx.Debugf("resolving yt-dlp remote url with format: %s", settings.YtDLPFormat)
-
-	cmd := exec.CommandContext(ctx.Context, "yt-dlp", args...)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("yt-dlp url resolve failed: %w; stderr: %s", err, strings.TrimSpace(stderr.String()))
-	}
-
-	for _, line := range strings.Split(string(output), "\n") {
-		url := strings.TrimSpace(line)
-		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-			return url, nil
-		}
-	}
-
-	return "", fmt.Errorf("yt-dlp returned no remote url")
 }
 
 func ytDLPDownloadArgs(filePath string, settings *models.DownloadSettings) []string {
@@ -210,46 +153,6 @@ func ytDLPDownloadArgs(filePath string, settings *models.DownloadSettings) []str
 		args = append(args, "--merge-output-format", "mp4")
 	}
 	return append(args, settings.YtDLPURL)
-}
-
-func ytDLPURLArgs(settings *models.DownloadSettings) []string {
-	args := []string{
-		"--get-url",
-		"--no-playlist",
-		"--no-warnings",
-		"--force-ipv4",
-		"--socket-timeout", "10",
-		"-f", settings.YtDLPFormat,
-	}
-	if settings.YtDLPSort != "" {
-		args = append(args, "--format-sort", settings.YtDLPSort)
-	}
-	if settings.YtDLPCookieJar != "" {
-		args = append(args, "--cookies", settings.YtDLPCookieJar)
-	}
-	if settings.YtDLPArgs != "" {
-		args = append(args, "--extractor-args", settings.YtDLPArgs)
-	}
-	return append(args, settings.YtDLPURL)
-}
-
-func ytDLPProgressBucket(line string) int {
-	matches := ytDLPProgressPattern.FindStringSubmatch(line)
-	if len(matches) != 2 {
-		return -1
-	}
-
-	percent, err := strconv.ParseFloat(matches[1], 64)
-	if err != nil {
-		return -1
-	}
-	if percent >= 100 {
-		return 100
-	}
-	if percent < 0 {
-		return -1
-	}
-	return int(percent/10) * 10
 }
 
 func resolveYtDLPOutputPath(filePath string) (string, error) {

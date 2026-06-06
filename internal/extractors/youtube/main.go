@@ -450,9 +450,7 @@ func youtubeVideoDownloadSettings(contentURL string, formatID string) *models.Do
 		target = 720
 	}
 	settings := youtubeDownloadSettings(contentURL, youtubeVideoSelector(target, true))
-	if target <= 720 {
-		settings.YtDLPRemote = true
-	} else {
+	if target > 720 {
 		settings.YtDLPSort = youtubeVideoSort(target)
 	}
 	return settings

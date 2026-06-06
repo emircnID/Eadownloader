@@ -103,12 +103,12 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	defer task.ExtractorCtx.FilesTracker.Cleanup()
 
 	ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
-		Text: "Format bilgisi aliniyor...",
+		Text: "Indiriliyor...",
 	})
 	progress := youtubeProgressReporter(bot, ctx)
 	task.ExtractorCtx.ProgressFunc = progress
 	task.ExtractorCtx.SkipQueue = true
-	progress("Format bilgisi aliniyor...")
+	progress("Indiriliyor...")
 
 	media, err := youtube.GetMedia(task.ExtractorCtx)
 	if err != nil {
@@ -121,8 +121,6 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 		core.HandleError(bot, ctx, task.ExtractorCtx, err)
 		return ext.EndGroups
 	}
-
-	progress("Indirme hazirlaniyor...")
 
 	if err := core.HandlePreparedDownloadTask(
 		bot,
@@ -142,7 +140,8 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 
 func youtubeProgressReporter(bot *gotgbot.Bot, ctx *ext.Context) func(string) {
 	var lastMessage string
-	return func(message string) {
+	return func(_ string) {
+		message := "Indiriliyor..."
 		if message == "" || message == lastMessage {
 			return
 		}

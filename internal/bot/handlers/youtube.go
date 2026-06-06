@@ -34,7 +34,7 @@ func YouTubePromptHandler(bot *gotgbot.Bot, ctx *ext.Context, extractorCtx *mode
 
 	_, err := ctx.EffectiveMessage.Reply(
 		bot,
-		"YouTube formatini sec:",
+		"🎬 YouTube formatını seç:",
 		&gotgbot.SendMessageOpts{
 			ReplyMarkup: &gotgbot.InlineKeyboardMarkup{
 				InlineKeyboard: buildYouTubeButtons(taskID, youtube.SelectableFormatIDs()),
@@ -93,7 +93,7 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	task, ok := youtubeTasks.Get(taskID)
 	if !ok {
 		ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
-			Text:      "Bu secim zaman asimina ugradi. Linki tekrar gonder.",
+			Text:      "Bu seçim zaman aşımına uğradı. Linki tekrar gönder.",
 			ShowAlert: true,
 		})
 		return ext.EndGroups
@@ -103,12 +103,12 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	defer task.ExtractorCtx.FilesTracker.Cleanup()
 
 	ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
-		Text: "Indiriliyor...",
+		Text: "📥 İndiriliyor...",
 	})
 	progress := youtubeProgressReporter(bot, ctx)
 	task.ExtractorCtx.ProgressFunc = progress
 	task.ExtractorCtx.SkipQueue = true
-	progress("Indiriliyor...")
+	progress("📥 İndiriliyor...")
 
 	media, err := youtube.GetMedia(task.ExtractorCtx)
 	if err != nil {
@@ -141,7 +141,7 @@ func YouTubeCallbackHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 func youtubeProgressReporter(bot *gotgbot.Bot, ctx *ext.Context) func(string) {
 	var lastMessage string
 	return func(_ string) {
-		message := "Indiriliyor..."
+		message := "📥 İndiriliyor..."
 		if message == "" || message == lastMessage {
 			return
 		}

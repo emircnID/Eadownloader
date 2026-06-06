@@ -64,7 +64,7 @@ func HandlePreparedDownloadTask(
 	if cache && config.Env.Caching {
 		taskResult, err := taskFromDatabaseByContentID(extractorCtx, media.ContentID)
 		if err == nil {
-			extractorCtx.Progress("Cache bulundu, Telegram'a yukleniyor...")
+			extractorCtx.Progress("⚡ Önbellek bulundu, Telegram'a yükleniyor...")
 			caption := formatCaption(
 				taskResult.Media,
 				bot.Username,
@@ -85,14 +85,14 @@ func HandlePreparedDownloadTask(
 	}
 
 	if !extractorCtx.SkipQueue {
-		extractorCtx.Progress("Sira kontrol ediliyor...")
+		extractorCtx.Progress("⏳ Sıra kontrol ediliyor...")
 		acquireQueue(key)
 		defer releaseQueue(key)
 
 		if cache && config.Env.Caching {
 			taskResult, err := taskFromDatabaseByContentID(extractorCtx, media.ContentID)
 			if err == nil {
-				extractorCtx.Progress("Cache bulundu, Telegram'a yukleniyor...")
+				extractorCtx.Progress("⚡ Önbellek bulundu, Telegram'a yükleniyor...")
 				caption := formatCaption(
 					taskResult.Media,
 					bot.Username,
@@ -113,7 +113,7 @@ func HandlePreparedDownloadTask(
 		}
 	}
 
-	extractorCtx.Progress("Indirme basliyor...")
+	extractorCtx.Progress("🚀 İndirme başlıyor...")
 
 	formats, err := downloadMediaFormats(extractorCtx, media)
 	if err != nil {

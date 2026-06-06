@@ -98,7 +98,7 @@ func downloadItem(
 		return
 	}
 	if downloadedFormat == nil {
-		ctx.Progress("Medya indiriliyor...")
+		ctx.Progress("📥 Medya indiriliyor...")
 		downloadedFormat, err = downloadFormat(ctx, index, format)
 	}
 	if err != nil {
@@ -193,7 +193,7 @@ func downloadFormat(
 	var err error
 	switch {
 	case isYtDLPDownload(format):
-		ctx.Progress("Indiriliyor...")
+		ctx.Progress("📥 İndiriliyor...")
 		filePath, err = download.DownloadFileWithYtDLP(
 			ctx,
 			fileName,
@@ -265,7 +265,7 @@ func downloadMergedVideoAudioFormats(
 		return nil, nil
 	}
 
-	ctx.Progress("Video ve ses indiriliyor...")
+	ctx.Progress("📥 Video ve ses indiriliyor...")
 
 	videoResult := make(chan *models.DownloadedFormat, 1)
 	audioResult := make(chan *models.DownloadedFormat, 1)
@@ -287,7 +287,7 @@ func downloadMergedVideoAudioFormats(
 		return nil, downloadedAudio.Error
 	}
 
-	ctx.Progress("Video ve ses birlestiriliyor...")
+	ctx.Progress("🧩 Video ve ses birleştiriliyor...")
 
 	outputPath := strings.TrimSuffix(
 		downloadedVideo.FilePath,

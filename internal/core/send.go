@@ -187,9 +187,9 @@ func uploadProgressMessage(chunk []*models.DownloadedFormat) string {
 		totalSize += format.Format.FileSize
 	}
 	if totalSize <= 0 {
-		return "Telegram'a yukleniyor..."
+		return "📤 Telegram'a yükleniyor..."
 	}
-	return fmt.Sprintf("Telegram'a yukleniyor... (%s)", formatBytes(totalSize))
+	return fmt.Sprintf("📤 Telegram'a yükleniyor... (%s)", formatBytes(totalSize))
 }
 
 func formatBytes(bytes int64) string {

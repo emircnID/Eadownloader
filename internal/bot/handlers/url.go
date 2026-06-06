@@ -31,6 +31,7 @@ func URLHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	if util.HasHashtagEntity(message, "skip") {
 		return ext.EndGroups
 	}
+	setProcessingReaction(bot, message)
 
 	extractorCtx := extractors.FromURL(url)
 	if extractorCtx == nil || extractorCtx.Extractor == nil {
@@ -84,4 +85,17 @@ func URLHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	}
 
 	return ext.EndGroups
+}
+
+func setProcessingReaction(bot *gotgbot.Bot, message *gotgbot.Message) {
+	if message == nil {
+		return
+	}
+	if _, err := message.SetReaction(bot, &gotgbot.SetMessageReactionOpts{
+		Reaction: []gotgbot.ReactionType{
+			gotgbot.ReactionTypeEmoji{Emoji: "👀"},
+		},
+	}); err != nil {
+		logger.L.Debugf("failed to set processing reaction: %v", err)
+	}
 }

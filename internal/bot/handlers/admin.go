@@ -119,33 +119,54 @@ func buildAdminHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	text := fmt.Sprintf(
-		"<b>EaDownloader Admin</b>\n\n"+
-			"<b>Overview</b>\n"+
-			"Users: %d\n"+
-			"Groups: %d\n"+
-			"Downloads: %d\n"+
-			"Storage: %s\n"+
-			"Banned users: %d\n\n"+
-			"Choose a module below.",
-		stats.TotalPrivateChats,
-		stats.TotalGroupChats,
-		stats.TotalDownloads,
+		"<b>⚙️ EaDownloader Yönetim</b>\n\n"+
+			"<b>📊 Genel Görünüm</b>\n"+
+			"%s\n"+
+			"%s\n"+
+			"%s\n"+
+			"%s\n\n"+
+			"💾 Depolama: <b>%s</b>\n\n"+
+			"Bir modül seçin.",
+		metricBar("👤 Kullanıcılar", stats.TotalPrivateChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
+		metricBar("👥 Gruplar", stats.TotalGroupChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
+		metricBar("📥 İndirmeler", stats.TotalDownloads, stats.TotalDownloads),
+		metricBar("⛔ Banlı", bannedUsersCount, max(stats.TotalPrivateChats, 1)),
 		formatBytes(stats.TotalDownloadsSize),
-		bannedUsersCount,
 	)
 
 	return text, gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
-				{Text: "Analytics", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
-				{Text: "Moderation", CallbackData: adminCallbackPrefix + adminScreenModeration},
+				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
+				{Text: "🛡 Moderasyon", CallbackData: adminCallbackPrefix + adminScreenModeration},
 			},
 			{
-				{Text: "System", CallbackData: adminCallbackPrefix + adminScreenSystem},
-				{Text: "Close", CallbackData: "close"},
+				{Text: "🖥 Sistem", CallbackData: adminCallbackPrefix + adminScreenSystem},
+				{Text: "✖️ Kapat", CallbackData: "close"},
 			},
 		},
 	}, nil
+}
+
+func metricBar(label string, value int64, maxValue int64) string {
+	const width = 8
+	if maxValue <= 0 {
+		maxValue = 1
+	}
+	filled := int((value*width + maxValue - 1) / maxValue)
+	if value == 0 {
+		filled = 0
+	}
+	if filled > width {
+		filled = width
+	}
+	return fmt.Sprintf(
+		"%s  <code>%s%s</code> <b>%d</b>",
+		label,
+		strings.Repeat("█", filled),
+		strings.Repeat("░", width-filled),
+		value,
+	)
 }
 
 func buildModerationHome() (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -155,21 +176,21 @@ func buildModerationHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	text := fmt.Sprintf(
-		"<b>Moderation</b>\n\n"+
-			"Manage users from a clean profile view.\n"+
-			"Banned users: %d",
+		"<b>🛡 Moderasyon</b>\n\n"+
+			"Kullanıcıları profil kartı üzerinden yönetin.\n"+
+			"Banlı kullanıcı: <b>%d</b>",
 		bannedUsersCount,
 	)
 
 	return text, gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
-				{Text: "Users", CallbackData: adminCallbackPrefix + adminScreenUsers},
-				{Text: "Banned Users", CallbackData: adminCallbackPrefix + adminScreenBans},
+				{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
+				{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
 			},
 			{
-				{Text: "Back", CallbackData: adminCallbackPrefix + adminScreenHome},
-				{Text: "Close", CallbackData: "close"},
+				{Text: "⬅️ Geri", CallbackData: adminCallbackPrefix + adminScreenHome},
+				{Text: "✖️ Kapat", CallbackData: "close"},
 			},
 		},
 	}, nil
@@ -188,14 +209,14 @@ func buildUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	if len(rows) == 0 {
-		return "<b>Users</b>\n\nNo users recorded yet.", userListKeyboard(rows), nil
+		return "<b>👤 Kullanıcılar</b>\n\nHenüz kayıtlı kullanıcı yok.", userListKeyboard(rows), nil
 	}
 
-	text := fmt.Sprintf("<b>Users</b>\nLast %d active private users\n\n", len(rows))
+	text := fmt.Sprintf("<b>👤 Kullanıcılar</b>\nSon aktif %d özel kullanıcı\n\n", len(rows))
 	for index, row := range rows {
-		status := "active"
+		status := "aktif"
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
-			status = "banned"
+			status = "banlı"
 		}
 		text += fmt.Sprintf(
 			"<b>%d.</b> %s\n<code>%d</code> · %s · %s\n\n",
@@ -221,13 +242,13 @@ func buildBannedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	if len(rows) == 0 {
-		return "<b>Banned Users</b>\n\nNo banned users yet.", bannedUserListKeyboard(rows), nil
+		return "<b>⛔ Banlı Kullanıcılar</b>\n\nHenüz banlı kullanıcı yok.", bannedUserListKeyboard(rows), nil
 	}
 
-	text := fmt.Sprintf("<b>Banned Users</b>\nTotal: %d\n\n", total)
+	text := fmt.Sprintf("<b>⛔ Banlı Kullanıcılar</b>\nToplam: <b>%d</b>\n\n", total)
 	for index, row := range rows {
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n<code>%d</code> · %s\nReason: %s\n\n",
+			"<b>%d.</b> %s\n<code>%d</code> · %s\nSebep: %s\n\n",
 			index+1,
 			formatBannedUserDisplayName(row),
 			row.UserID,
@@ -255,20 +276,20 @@ func buildUserProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
 
-	status := "active"
+	status := "aktif"
 	if banned {
-		status = "banned"
+		status = "banlı"
 	}
 
 	text := fmt.Sprintf(
-		"<b>User Profile</b>\n\n"+
+		"<b>👤 Kullanıcı Profili</b>\n\n"+
 			"%s\n"+
 			"ID: <code>%d</code>\n"+
-			"Username: %s\n"+
-			"Language: %s\n"+
-			"Status: %s\n"+
-			"Created: %s\n"+
-			"Last seen: %s",
+			"Kullanıcı adı: %s\n"+
+			"Dil: %s\n"+
+			"Durum: %s\n"+
+			"Kayıt: %s\n"+
+			"Son görülme: %s",
 		formatUserProfileDisplayName(user),
 		user.ChatID,
 		formatUsername(user.Username),
@@ -288,12 +309,12 @@ func buildUnknownUserProfile(userID int64) (string, gotgbot.InlineKeyboardMarkup
 	}
 
 	text := fmt.Sprintf(
-		"<b>User Profile</b>\n\n"+
+		"<b>👤 Kullanıcı Profili</b>\n\n"+
 			"ID: <code>%d</code>\n"+
-			"Status: %s\n\n"+
-			"This user is not in the chat table yet.",
+			"Durum: %s\n\n"+
+			"Bu kullanıcı henüz sohbet tablosunda kayıtlı değil.",
 		userID,
-		map[bool]string{true: "banned", false: "unknown"}[banned],
+		map[bool]string{true: "banlı", false: "bilinmiyor"}[banned],
 	)
 	return text, userProfileKeyboard(userID, banned), nil
 }
@@ -304,23 +325,23 @@ func buildBanConfirm(value string) (string, gotgbot.InlineKeyboardMarkup, error)
 		return buildUserList()
 	}
 	if util.IsAdminID(userID) {
-		return "<b>Protected User</b>\n\nAdmins cannot be banned.", userProfileKeyboard(userID, false), nil
+		return "<b>🛡 Korumalı Kullanıcı</b>\n\nAdminler banlanamaz.", userProfileKeyboard(userID, false), nil
 	}
 
 	text := fmt.Sprintf(
-		"<b>Confirm Ban</b>\n\n"+
-			"User ID: <code>%d</code>\n\n"+
-			"The user will be blocked from private chats, groups and inline mode.",
+		"<b>⛔ Ban Onayı</b>\n\n"+
+			"Kullanıcı ID: <code>%d</code>\n\n"+
+			"Kullanıcı özel sohbet, grup ve inline modda botu kullanamayacak.",
 		userID,
 	)
 	return text, gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
-				{Text: "Confirm Ban", CallbackData: adminCallbackPrefix + adminActionBan + ":" + strconv.FormatInt(userID, 10)},
+				{Text: "⛔ Banı Onayla", CallbackData: adminCallbackPrefix + adminActionBan + ":" + strconv.FormatInt(userID, 10)},
 			},
 			{
-				{Text: "Back", CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(userID, 10)},
-				{Text: "Close", CallbackData: "close"},
+				{Text: "⬅️ Geri", CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(userID, 10)},
+				{Text: "✖️ Kapat", CallbackData: "close"},
 			},
 		},
 	}, nil
@@ -333,16 +354,16 @@ func buildSystemPanel() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	text := fmt.Sprintf(
-		"<b>System</b>\n\n"+
-			"Admins: %d\n"+
+		"<b>🖥 Sistem</b>\n\n"+
+			"Adminler: %d\n"+
 			"Whitelist: %d\n"+
-			"Banned users: %d\n"+
-			"Concurrent updates: %d\n"+
-			"Max duration: %s\n"+
-			"Max file size: %s\n"+
-			"Caching: %t\n"+
-			"Log level: %s\n"+
-			"Time: %s",
+			"Banlı kullanıcı: %d\n"+
+			"Eşzamanlı işlem: %d\n"+
+			"Maksimum süre: %s\n"+
+			"Maksimum dosya: %s\n"+
+			"Önbellek: %t\n"+
+			"Log seviyesi: %s\n"+
+			"Saat: %s",
 		len(config.Env.Admins),
 		len(config.Env.Whitelist),
 		bannedUsersCount,
@@ -363,7 +384,7 @@ func banUserFromCallback(ctx *ext.Context, value string) (string, gotgbot.Inline
 		return buildUserList()
 	}
 	if util.IsAdminID(userID) {
-		return "<b>Protected User</b>\n\nAdmins cannot be banned.", userProfileKeyboard(userID, false), nil
+		return "<b>🛡 Korumalı Kullanıcı</b>\n\nAdminler banlanamaz.", userProfileKeyboard(userID, false), nil
 	}
 
 	_, err = database.Q().BanUser(
@@ -394,7 +415,7 @@ func unbanUserFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup, 
 func userListKeyboard(rows []database.ListChatsByTypeRow) gotgbot.InlineKeyboardMarkup {
 	buttons := numberedUserButtons(rows)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
-		{Text: "Banned Users", CallbackData: adminCallbackPrefix + adminScreenBans},
+		{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
 	})
 	buttons = append(buttons, adminBackRow(adminScreenModeration))
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
@@ -411,7 +432,7 @@ func bannedUserListKeyboard(rows []database.ListBannedUsersRow) gotgbot.InlineKe
 	}
 	buttons = append(buttons, chunkButtons(numberedButtons, 5)...)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
-		{Text: "Users", CallbackData: adminCallbackPrefix + adminScreenUsers},
+		{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
 	})
 	buttons = append(buttons, adminBackRow(adminScreenModeration))
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
@@ -429,10 +450,10 @@ func numberedUserButtons(rows []database.ListChatsByTypeRow) [][]gotgbot.InlineK
 }
 
 func userProfileKeyboard(userID int64, banned bool) gotgbot.InlineKeyboardMarkup {
-	actionText := "Ban User"
+	actionText := "⛔ Banla"
 	actionData := adminCallbackPrefix + adminActionBanConfirm + ":" + strconv.FormatInt(userID, 10)
 	if banned {
-		actionText = "Unban User"
+		actionText = "✅ Banı Kaldır"
 		actionData = adminCallbackPrefix + adminActionUnban + ":" + strconv.FormatInt(userID, 10)
 	}
 
@@ -442,8 +463,8 @@ func userProfileKeyboard(userID int64, banned bool) gotgbot.InlineKeyboardMarkup
 				{Text: actionText, CallbackData: actionData},
 			},
 			{
-				{Text: "Users", CallbackData: adminCallbackPrefix + adminScreenUsers},
-				{Text: "Banned Users", CallbackData: adminCallbackPrefix + adminScreenBans},
+				{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
+				{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
 			},
 			adminBackRow(adminScreenModeration),
 		},
@@ -460,8 +481,8 @@ func adminBackKeyboard(screen string) gotgbot.InlineKeyboardMarkup {
 
 func adminBackRow(screen string) []gotgbot.InlineKeyboardButton {
 	return []gotgbot.InlineKeyboardButton{
-		{Text: "Back", CallbackData: adminCallbackPrefix + screen},
-		{Text: "Close", CallbackData: "close"},
+		{Text: "⬅️ Geri", CallbackData: adminCallbackPrefix + screen},
+		{Text: "✖️ Kapat", CallbackData: "close"},
 	}
 }
 

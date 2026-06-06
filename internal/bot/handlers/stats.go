@@ -154,19 +154,19 @@ func formatStatsSummary(period string) (string, error) {
 		groupChatsByLang = map[string]int64{}
 	}
 
-	message := fmt.Sprintf("<b>EaDownloader stats</b>\nPeriod: %s\n\n", periodText)
-	message += fmt.Sprintf("<b>Private users:</b> %d\n", stats.TotalPrivateChats)
-	message += fmt.Sprintf("<b>Groups:</b> %d\n", stats.TotalGroupChats)
-	message += fmt.Sprintf("<b>Downloads:</b> %d\n", stats.TotalDownloads)
-	message += fmt.Sprintf("<b>Total size:</b> %s\n", formatBytes(stats.TotalDownloadsSize))
+	message := fmt.Sprintf("<b>📊 EaDownloader Analitik</b>\nDönem: %s\n\n", periodText)
+	message += fmt.Sprintf("<b>👤 Kullanıcılar:</b> %d\n", stats.TotalPrivateChats)
+	message += fmt.Sprintf("<b>👥 Gruplar:</b> %d\n", stats.TotalGroupChats)
+	message += fmt.Sprintf("<b>📥 İndirmeler:</b> %d\n", stats.TotalDownloads)
+	message += fmt.Sprintf("<b>💾 Toplam boyut:</b> %s\n", formatBytes(stats.TotalDownloadsSize))
 
 	if len(privateChatsByLang) > 0 || len(groupChatsByLang) > 0 {
-		message += "\n<b>Languages</b>\n"
+		message += "\n<b>🌐 Diller</b>\n"
 		if len(privateChatsByLang) > 0 {
-			message += "Private: " + formatLanguageMap(privateChatsByLang) + "\n"
+			message += "Özel: " + formatLanguageMap(privateChatsByLang) + "\n"
 		}
 		if len(groupChatsByLang) > 0 {
-			message += "Groups: " + formatLanguageMap(groupChatsByLang) + "\n"
+			message += "Gruplar: " + formatLanguageMap(groupChatsByLang) + "\n"
 		}
 	}
 
@@ -185,19 +185,19 @@ func formatChatList(chatType database.ChatType) (string, error) {
 		return "", err
 	}
 
-	title := "Private users"
+	title := "Kullanıcılar"
 	if chatType == database.ChatTypeGroup {
-		title = "Groups"
+		title = "Gruplar"
 	}
 
 	if len(chats) == 0 {
-		return fmt.Sprintf("<b>%s</b>\n\nNo records yet.", title), nil
+		return fmt.Sprintf("<b>%s</b>\n\nHenüz kayıt yok.", title), nil
 	}
 
-	message := fmt.Sprintf("<b>%s</b>\nLast %d active records\n\n", title, len(chats))
+	message := fmt.Sprintf("<b>%s</b>\nSon aktif %d kayıt\n\n", title, len(chats))
 	for i, chat := range chats {
 		message += fmt.Sprintf(
-			"<b>%d. %s</b>\nID: <code>%d</code>\nLanguage: %s\nLast seen: %s\n\n",
+			"<b>%d. %s</b>\nID: <code>%d</code>\nDil: %s\nSon görülme: %s\n\n",
 			i+1,
 			formatChatDisplayName(chat),
 			chat.ChatID,
@@ -222,13 +222,13 @@ func formatPlatformStats(period string) (string, error) {
 	}
 
 	if len(rows) == 0 {
-		return fmt.Sprintf("<b>Platform stats</b>\nPeriod: %s\n\nNo downloads yet.", periodText), nil
+		return fmt.Sprintf("<b>🧩 Platformlar</b>\nDönem: %s\n\nHenüz indirme yok.", periodText), nil
 	}
 
-	message := fmt.Sprintf("<b>Platform stats</b>\nPeriod: %s\n\n", periodText)
+	message := fmt.Sprintf("<b>🧩 Platformlar</b>\nDönem: %s\n\n", periodText)
 	for i, row := range rows {
 		message += fmt.Sprintf(
-			"<b>%d. %s</b>\nDownloads: %d\nSize: %s\n\n",
+			"<b>%d. %s</b>\nİndirme: %d\nBoyut: %s\n\n",
 			i+1,
 			html.EscapeString(row.ExtractorID),
 			row.Downloads,
@@ -244,13 +244,13 @@ func formatRecentErrors() (string, error) {
 		return "", err
 	}
 	if len(rows) == 0 {
-		return "<b>Recent errors</b>\n\nNo errors recorded.", nil
+		return "<b>🚨 Son Hatalar</b>\n\nKayıtlı hata yok.", nil
 	}
 
-	message := "<b>Recent errors</b>\n\n"
+	message := "<b>🚨 Son Hatalar</b>\n\n"
 	for i, row := range rows {
 		message += fmt.Sprintf(
-			"<b>%d. <code>%s</code></b>\nOccurrences: %d\nLast seen: %s\n%s\n\n",
+			"<b>%d. <code>%s</code></b>\nTekrar: %d\nSon görülme: %s\n%s\n\n",
 			i+1,
 			html.EscapeString(row.ID),
 			row.Occurrences,
@@ -270,13 +270,13 @@ func getStatsKeyboard(screen string, period string) gotgbot.InlineKeyboardMarkup
 			statsPeriodButton("all", "all", screen),
 		},
 		{
-			{Text: "Platforms", CallbackData: statsCallbackPrefix + statsScreenPlatforms + ":" + period},
-			{Text: "Errors", CallbackData: statsCallbackPrefix + statsScreenErrors},
+			{Text: "🧩 Platformlar", CallbackData: statsCallbackPrefix + statsScreenPlatforms + ":" + period},
+			{Text: "🚨 Hatalar", CallbackData: statsCallbackPrefix + statsScreenErrors},
 		},
 	}
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
-		{Text: "Overview", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + period},
-		{Text: "Admin", CallbackData: adminCallbackPrefix + adminScreenHome},
+		{Text: "📊 Özet", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + period},
+		{Text: "⚙️ Admin", CallbackData: adminCallbackPrefix + adminScreenHome},
 	})
 
 	return gotgbot.InlineKeyboardMarkup{
@@ -299,13 +299,13 @@ func statsPeriod(period string) (time.Time, string) {
 	now := time.Now()
 	switch period {
 	case "1d":
-		return now.Add(-24 * time.Hour), "24 hours"
+		return now.Add(-24 * time.Hour), "24 saat"
 	case "7d":
-		return now.Add(-7 * 24 * time.Hour), "7 days"
+		return now.Add(-7 * 24 * time.Hour), "7 gün"
 	case "30d":
-		return now.Add(-30 * 24 * time.Hour), "30 days"
+		return now.Add(-30 * 24 * time.Hour), "30 gün"
 	default:
-		return now.Add(-100 * 365 * 24 * time.Hour), "all time"
+		return now.Add(-100 * 365 * 24 * time.Hour), "tüm zamanlar"
 	}
 }
 
@@ -385,11 +385,11 @@ func formatTimestamp(value time.Time) string {
 	duration := time.Since(value)
 	switch {
 	case duration < time.Minute:
-		return "just now"
+		return "az önce"
 	case duration < time.Hour:
-		return fmt.Sprintf("%d min ago", int(duration.Minutes()))
+		return fmt.Sprintf("%d dk önce", int(duration.Minutes()))
 	case duration < 24*time.Hour:
-		return fmt.Sprintf("%d h ago", int(duration.Hours()))
+		return fmt.Sprintf("%d sa önce", int(duration.Hours()))
 	default:
 		return value.Format("2006-01-02 15:04")
 	}

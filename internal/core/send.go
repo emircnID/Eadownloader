@@ -395,5 +395,5 @@ func localUploadPath(filePath string) string {
 	if err != nil {
 		return filePath
 	}
-	return absolutePath
+	return "file://" + filepath.ToSlash(absolutePath)
 }

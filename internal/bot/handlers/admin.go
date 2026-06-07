@@ -404,6 +404,7 @@ func buildUnknownUserProfile(userID int64) (string, gotgbot.InlineKeyboardMarkup
 	text := fmt.Sprintf(
 		"<b>👤 Kullanıcı Profili</b>\n\n"+
 			"ID: <code>%d</code>\n"+
+			"Kullanıcı adı: bilinmiyor\n"+
 			"Durum: %s\n\n"+
 			"Bu kullanıcı henüz sohbet tablosunda kayıtlı değil.",
 		userID,

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"strconv"
 	"strings"
 	"time"
 
@@ -357,42 +356,6 @@ func statsPeriod(period string) (time.Time, string) {
 	default:
 		return now.Add(-100 * 365 * 24 * time.Hour), "tüm zamanlar"
 	}
-}
-
-func formatChatDisplayName(chat database.ListChatsByTypeRow) string {
-	name := chatDisplayLabel(chat)
-	if chat.Type == database.ChatTypePrivate {
-		return fmt.Sprintf(
-			"<a href='tg://user?id=%d'>%s</a>",
-			chat.ChatID,
-			html.EscapeString(name),
-		)
-	}
-	if chat.Username != "" {
-		return fmt.Sprintf(
-			"<a href='https://t.me/%s'>%s</a>",
-			html.EscapeString(chat.Username),
-			html.EscapeString(name),
-		)
-	}
-	return html.EscapeString(name)
-}
-
-func chatDisplayLabel(chat database.ListChatsByTypeRow) string {
-	name := strings.TrimSpace(chat.Title)
-	if name == "" {
-		name = strings.TrimSpace(strings.Join([]string{chat.FirstName, chat.LastName}, " "))
-	}
-	if name == "" && chat.Username != "" {
-		name = "@" + chat.Username
-	}
-	if name == "" {
-		name = strconv.FormatInt(chat.ChatID, 10)
-	}
-	if chat.Username != "" && !strings.Contains(name, "@"+chat.Username) {
-		name += " (@" + chat.Username + ")"
-	}
-	return name
 }
 
 func formatLanguageMap(values map[string]int64) string {

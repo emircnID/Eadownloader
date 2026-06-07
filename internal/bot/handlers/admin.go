@@ -362,7 +362,7 @@ func buildUserProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	activeMute, muted, err := getActiveMute(user.ChatID)
+	muteExpiresAt, muted, err := getActiveMuteExpiresAt(user.ChatID)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -371,7 +371,7 @@ func buildUserProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error
 	if banned {
 		status = "Banlı"
 	} else if muted {
-		status = "Susturuldu · kalan: " + formatDurationLeft(activeMute.ExpiresAt.Time)
+		status = "Susturuldu · kalan: " + formatDurationLeft(muteExpiresAt)
 	}
 
 	text := fmt.Sprintf(
@@ -409,7 +409,7 @@ func buildUnknownUserProfile(userID int64) (string, gotgbot.InlineKeyboardMarkup
 		userID,
 		map[bool]string{true: "banlı", false: "bilinmiyor"}[banned],
 	)
-	_, muted, err := getActiveMute(userID)
+	_, muted, err := getActiveMuteExpiresAt(userID)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -717,15 +717,15 @@ func adminChatDisplayLabel(chat database.ListChatsByTypeRow) string {
 	return name
 }
 
-func getActiveMute(userID int64) (database.GetActiveMuteRow, bool, error) {
+func getActiveMuteExpiresAt(userID int64) (time.Time, bool, error) {
 	activeMute, err := database.Q().GetActiveMute(context.Background(), userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return database.GetActiveMuteRow{}, false, nil
+		return time.Time{}, false, nil
 	}
 	if err != nil {
-		return database.GetActiveMuteRow{}, false, err
+		return time.Time{}, false, err
 	}
-	return activeMute, true, nil
+	return activeMute.ExpiresAt.Time, true, nil
 }
 
 func bannedUserDisplayLabel(row database.ListBannedUsersRow) string {

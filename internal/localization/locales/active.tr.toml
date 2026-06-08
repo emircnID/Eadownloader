@@ -1,5 +1,5 @@
 AddButton = "Bir Gruba Ekle"
-AddedToGroupMessage = "beni eklediğiniz için teşekkürler! bu grup için botu yapılandırmak üzere /settings komutunu kullanın"
+AddedToGroupMessage = "beni eklediğiniz için teşekkürler! bu grup için Botu yapılandırmak üzere /settings komutunu kullanın"
 BackButton = "Geri"
 CaptionsButton = "Altyazılar"
 CaptionsSettingsMessage = "etkin olduğunda, varsa indirilen içeriğe orijinal açıklamayı ekler"

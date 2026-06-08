@@ -67,15 +67,15 @@ func UnbanCommandHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	return replyModerationUsage(bot, ctx, fmt.Sprintf("✅ <b>%s</b> için ban/susturma kaldırıldı.\nID: <code>%d</code>", html.EscapeString(label), userID))
 }
 
-func SilentCommandHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
+func MuteCommandHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	if !isModerationAdmin(ctx) {
 		return ext.EndGroups
 	}
 
 	args := commandArgs(ctx)
-	duration, err := parseSilentArgs(args)
+	duration, err := parseMuteArgs(args)
 	if err != nil {
-		return replyModerationUsage(bot, ctx, "Kullanım: <code>/silent 1h 123456</code>, <code>/silent 30m @username</code> veya reply ile <code>/silent 1h</code>.")
+		return replyModerationUsage(bot, ctx, "Kullanım: <code>/mute 1h 123456</code>, <code>/mute 30m @username</code> veya reply ile <code>/mute 1h</code>.")
 	}
 
 	userID, label, err := resolveModerationTarget(ctx, args, 0)
@@ -131,7 +131,7 @@ func commandArgs(ctx *ext.Context) []string {
 	return fields[1:]
 }
 
-func parseSilentArgs(args []string) (time.Duration, error) {
+func parseMuteArgs(args []string) (time.Duration, error) {
 	for _, arg := range args {
 		duration, err := parseCommandDuration(arg)
 		if err == nil {

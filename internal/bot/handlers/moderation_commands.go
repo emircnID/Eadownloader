@@ -239,7 +239,10 @@ func parseUserIDTarget(value string) (int64, bool, error) {
 	}
 
 	parsedURL, parseErr := url.Parse(value)
-	if parseErr != nil || parsedURL.Scheme == "" {
+	if parseErr != nil {
+		return 0, false, parseErr
+	}
+	if parsedURL.Scheme == "" {
 		return 0, false, nil
 	}
 	scheme := strings.ToLower(parsedURL.Scheme)

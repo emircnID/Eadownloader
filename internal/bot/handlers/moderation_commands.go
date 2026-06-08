@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -164,6 +165,9 @@ func resolveModerationTarget(ctx *ext.Context, args []string, startIndex int) (i
 		ctx.EffectiveMessage.ReplyToMessage != nil &&
 		ctx.EffectiveMessage.ReplyToMessage.From != nil {
 		user := ctx.EffectiveMessage.ReplyToMessage.From
+		if _, err := util.PrivateChatFromUser(user); err != nil {
+			return 0, "", err
+		}
 		return user.Id, userDisplayLabel(user), nil
 	}
 
@@ -213,11 +217,50 @@ func resolveModerationTargetValue(value string) (int64, string, error) {
 		return chat.ChatID, privateChatDisplayLabel(chat.FirstName, chat.LastName, chat.Username, chat.ChatID), nil
 	}
 
-	userID, err := strconv.ParseInt(value, 10, 64)
+	userID, ok, err := parseUserIDTarget(value)
 	if err != nil {
 		return 0, "", err
 	}
+	if !ok {
+		return 0, "", fmt.Errorf("invalid user id: %s", value)
+	}
 	return userID, strconv.FormatInt(userID, 10), nil
+}
+
+func parseUserIDTarget(value string) (int64, bool, error) {
+	value = strings.Trim(strings.TrimSpace(value), "<>")
+	if value == "" {
+		return 0, false, nil
+	}
+
+	userID, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		return userID, true, nil
+	}
+
+	parsedURL, parseErr := url.Parse(value)
+	if parseErr != nil || parsedURL.Scheme == "" {
+		return 0, false, nil
+	}
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "tg" && scheme != "telegram" {
+		return 0, false, nil
+	}
+
+	query := parsedURL.Query()
+	for _, key := range []string{"id", "user_id"} {
+		rawUserID := strings.TrimSpace(query.Get(key))
+		if rawUserID == "" {
+			continue
+		}
+		userID, err := strconv.ParseInt(rawUserID, 10, 64)
+		if err != nil {
+			return 0, false, err
+		}
+		return userID, true, nil
+	}
+
+	return 0, false, nil
 }
 
 func privateChatDisplayLabel(firstName string, lastName string, username string, chatID int64) string {

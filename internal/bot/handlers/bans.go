@@ -16,7 +16,15 @@ import (
 
 func BannedUserHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 	userID, ok := effectiveUserID(ctx)
-	if !ok || util.IsAdminID(userID) {
+	if !ok {
+		return ext.ContinueGroups
+	}
+	if user := effectiveUser(ctx); user != nil {
+		if _, err := util.PrivateChatFromUser(user); err != nil {
+			return err
+		}
+	}
+	if util.IsAdminID(userID) {
 		return ext.ContinueGroups
 	}
 
@@ -80,5 +88,18 @@ func effectiveUserID(ctx *ext.Context) (int64, bool) {
 		return ctx.InlineQuery.From.Id, true
 	default:
 		return 0, false
+	}
+}
+
+func effectiveUser(ctx *ext.Context) *gotgbot.User {
+	switch {
+	case ctx.EffectiveUser != nil:
+		return ctx.EffectiveUser
+	case ctx.CallbackQuery != nil:
+		return &ctx.CallbackQuery.From
+	case ctx.InlineQuery != nil:
+		return &ctx.InlineQuery.From
+	default:
+		return nil
 	}
 }

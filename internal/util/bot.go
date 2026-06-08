@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PaulSonOfLars/gotgbot/v2"
-	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"eadownloader/internal/config"
 	"eadownloader/internal/database"
 	"eadownloader/internal/localization"
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/PaulSonOfLars/gotgbot/v2/ext"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
@@ -90,15 +90,7 @@ func ChatFromContext(ctx *ext.Context) (*database.GetOrCreateChatRow, error) {
 		return nil, fmt.Errorf("unable to determine chat from context")
 	}
 
-	var language string
-	if config.Env.AutomaticLanguageDetection {
-		language = localization.GetLocaleFromCode(
-			languageCode,
-			config.Env.DefaultLanguage,
-		)
-	} else {
-		language = config.Env.DefaultLanguage
-	}
+	language := languageFromCode(languageCode)
 	res, err := database.Q().GetOrCreateChat(
 		context.Background(),
 		database.GetOrCreateChatParams{
@@ -121,6 +113,44 @@ func ChatFromContext(ctx *ext.Context) (*database.GetOrCreateChatRow, error) {
 	}
 
 	return &res, nil
+}
+
+func PrivateChatFromUser(user *gotgbot.User) (*database.GetOrCreateChatRow, error) {
+	if user == nil {
+		return nil, fmt.Errorf("user is nil")
+	}
+
+	res, err := database.Q().GetOrCreateChat(
+		context.Background(),
+		database.GetOrCreateChatParams{
+			ChatID:          user.Id,
+			Type:            database.ChatTypePrivate,
+			Username:        user.Username,
+			FirstName:       user.FirstName,
+			LastName:        user.LastName,
+			Language:        languageFromCode(user.LanguageCode),
+			Captions:        config.Env.DefaultCaptions,
+			Silent:          config.Env.DefaultSilent,
+			Nsfw:            config.Env.DefaultNSFW,
+			MediaAlbumLimit: config.Env.DefaultMediaAlbumLimit,
+			DeleteLinks:     config.Env.DefaultDeleteLinks,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+func languageFromCode(languageCode string) string {
+	if !config.Env.AutomaticLanguageDetection {
+		return config.Env.DefaultLanguage
+	}
+	return localization.GetLocaleFromCode(
+		languageCode,
+		config.Env.DefaultLanguage,
+	)
 }
 
 func HashHashtagEntity(msg *gotgbot.Message, entity string) bool {

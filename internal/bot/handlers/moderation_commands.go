@@ -153,6 +153,13 @@ func resolveModerationTarget(ctx *ext.Context, args []string, startIndex int) (i
 		}
 	}
 
+	if user, ok := textMentionModerationTarget(ctx); ok {
+		if _, err := util.PrivateChatFromUser(user); err != nil {
+			return 0, "", err
+		}
+		return user.Id, userDisplayLabel(user), nil
+	}
+
 	if ctx.EffectiveMessage != nil &&
 		ctx.EffectiveMessage.ReplyToMessage != nil &&
 		ctx.EffectiveMessage.ReplyToMessage.From != nil {
@@ -161,6 +168,36 @@ func resolveModerationTarget(ctx *ext.Context, args []string, startIndex int) (i
 	}
 
 	return 0, "", errors.New("target not found")
+}
+
+func textMentionModerationTarget(ctx *ext.Context) (*gotgbot.User, bool) {
+	if ctx.EffectiveMessage == nil {
+		return nil, false
+	}
+
+	var commandEnd int64 = -1
+	for _, entity := range ctx.EffectiveMessage.Entities {
+		if entity.Type == "bot_command" && entity.Offset == 0 {
+			commandEnd = entity.Offset + entity.Length
+			break
+		}
+	}
+
+	for _, entity := range ctx.EffectiveMessage.Entities {
+		if entity.Type != "text_mention" || entity.User == nil {
+			continue
+		}
+		if commandEnd >= 0 && entity.Offset <= commandEnd {
+			continue
+		}
+		parsed := gotgbot.ParseEntity(ctx.EffectiveMessage.Text, entity)
+		if _, err := parseCommandDuration(parsed.Text); err == nil {
+			continue
+		}
+		return entity.User, true
+	}
+
+	return nil, false
 }
 
 func resolveModerationTargetValue(value string) (int64, string, error) {

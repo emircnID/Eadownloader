@@ -819,9 +819,9 @@ func buildGroupBanConfirm(value string) (string, gotgbot.InlineKeyboardMarkup, e
 func formatUptime(d time.Duration) string {
 	d = d.Round(time.Second)
 	h := d / time.Hour
-	d = d % time.Hour
+	d %= time.Hour
 	m := d / time.Minute
-	d = d % time.Minute
+	d %= time.Minute
 	s := d / time.Second
 	return fmt.Sprintf("%d sa %d dk %d sn", h, m, s)
 }

@@ -1217,7 +1217,7 @@ func handleDbCleanup(bot *gotgbot.Bot, ctx *ext.Context, target string) (string,
 		}
 
 	case "downloads":
-		_, err := database.Conn().Exec(context.Background(), "TRUNCATE TABLE download_events CASCADE")
+		_, err := database.Conn().Exec(context.Background(), "TRUNCATE TABLE download_events, media CASCADE")
 		if err != nil {
 			status = "❌ Hata: " + err.Error()
 		} else {

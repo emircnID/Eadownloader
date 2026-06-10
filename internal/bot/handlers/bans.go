@@ -30,7 +30,10 @@ func BannedUserHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 
 	if groupID, ok := effectiveGroupChatID(ctx); ok {
 		if ended, err := stopIfChatRestricted(bot, ctx, groupID); err != nil || ended {
-			return err
+			if err != nil {
+				return err
+			}
+			return ext.EndGroups
 		}
 	}
 

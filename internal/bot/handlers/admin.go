@@ -23,7 +23,6 @@ const (
 	adminCallbackPrefix = "admin:"
 
 	adminScreenHome       = "home"
-	adminScreenModeration = "moderation"
 	adminScreenSystem     = "system"
 	adminScreenUsers      = "users"
 	adminScreenGroups     = "groups"
@@ -102,8 +101,6 @@ func resolveAdminCallback(ctx *ext.Context) (string, gotgbot.InlineKeyboardMarku
 	switch {
 	case data == adminScreenHome:
 		return buildAdminHome()
-	case data == adminScreenModeration:
-		return buildModerationHome()
 	case data == adminScreenUsers:
 		return buildUserList()
 	case strings.HasPrefix(data, adminScreenUsers+":"):
@@ -198,11 +195,7 @@ func buildAdminHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 			},
 			{
 				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
-				{Text: "🚨 Hatalar", CallbackData: statsCallbackPrefix + statsScreenErrors},
-			},
-			{
-				{Text: "🛡 Moderasyon", CallbackData: adminCallbackPrefix + adminScreenModeration},
-				{Text: "🖥 Sistem", CallbackData: adminCallbackPrefix + adminScreenSystem},
+				{Text: "🖥 Sistem Paneli", CallbackData: adminCallbackPrefix + adminScreenSystem},
 			},
 		},
 	}, nil
@@ -229,41 +222,7 @@ func metricBar(label string, value int64, maxValue int64) string {
 	)
 }
 
-func buildModerationHome() (string, gotgbot.InlineKeyboardMarkup, error) {
-	bannedUsersCount, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypePrivate)
-	if err != nil {
-		return "", gotgbot.InlineKeyboardMarkup{}, err
-	}
-	mutedUsersCount, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypePrivate)
-	if err != nil {
-		return "", gotgbot.InlineKeyboardMarkup{}, err
-	}
 
-	text := fmt.Sprintf(
-		"<b>🛡 Moderasyon</b>\n\n"+
-			"Kullanıcıları profil kartı üzerinden yönetin.\n"+
-			"Banlı kullanıcı: <b>%d</b>\n"+
-			"Susturulan kullanıcı: <b>%d</b>",
-		bannedUsersCount,
-		mutedUsersCount,
-	)
-
-	return text, gotgbot.InlineKeyboardMarkup{
-		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
-			{
-				{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
-				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
-			},
-			{
-				{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
-			},
-			{
-				{Text: "🔇 Susturulanlar", CallbackData: adminCallbackPrefix + adminScreenMutes},
-			},
-			adminHomeRow(),
-		},
-	}, nil
-}
 
 func buildUserList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, error) {
 	page := parseAdminPage(pageValues...)
@@ -381,7 +340,7 @@ func buildMutedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	if len(rows) == 0 {
-		return "<b>🔇 Susturulan Gruplar</b>\n\nAktif susturulan grup yok.", groupModerationListKeyboard(), nil
+		return "<b>🔇 Susturulan Gruplar</b>\n\nAktif susturulan grup yok.", mutedGroupListKeyboard(), nil
 	}
 
 	text := fmt.Sprintf("<b>🔇 Susturulan Gruplar</b>\nToplam: <b>%d</b>\n\n", total)
@@ -396,7 +355,7 @@ func buildMutedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
 		)
 	}
 
-	return strings.TrimSpace(text), groupModerationListKeyboard(), nil
+	return strings.TrimSpace(text), mutedGroupListKeyboard(), nil
 }
 
 func buildBannedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -413,7 +372,7 @@ func buildBannedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	if len(rows) == 0 {
-		return "<b>⛔ Banlı Gruplar</b>\n\nHenüz banlı grup yok.", groupModerationListKeyboard(), nil
+		return "<b>⛔ Banlı Gruplar</b>\n\nHenüz banlı grup yok.", bannedGroupListKeyboard(), nil
 	}
 
 	text := fmt.Sprintf("<b>⛔ Banlı Gruplar</b>\nToplam: <b>%d</b>\n\n", total)
@@ -428,7 +387,7 @@ func buildBannedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
 		)
 	}
 
-	return strings.TrimSpace(text), groupModerationListKeyboard(), nil
+	return strings.TrimSpace(text), bannedGroupListKeyboard(), nil
 }
 
 func buildMutedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -883,7 +842,7 @@ func buildSystemPanel() (string, gotgbot.InlineKeyboardMarkup, error) {
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
-	return text, adminBackKeyboard(adminScreenHome), nil
+	return text, systemPanelKeyboard(), nil
 }
 
 func banUserFromCallback(ctx *ext.Context, value string) (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -1056,15 +1015,35 @@ func groupListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total in
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
-func groupModerationListKeyboard() gotgbot.InlineKeyboardMarkup {
+func bannedGroupListKeyboard() gotgbot.InlineKeyboardMarkup {
 	return gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
 				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
-			},
-			{
-				{Text: "⛔ Banlı Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupBans},
 				{Text: "🔇 Susturulan Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupMutes},
+			},
+			adminHomeRow(),
+		},
+	}
+}
+
+func mutedGroupListKeyboard() gotgbot.InlineKeyboardMarkup {
+	return gotgbot.InlineKeyboardMarkup{
+		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
+				{Text: "⛔ Banlı Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupBans},
+			},
+			adminHomeRow(),
+		},
+	}
+}
+
+func systemPanelKeyboard() gotgbot.InlineKeyboardMarkup {
+	return gotgbot.InlineKeyboardMarkup{
+		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: "🚨 Hatalar", CallbackData: statsCallbackPrefix + statsScreenErrors},
 			},
 			adminHomeRow(),
 		},

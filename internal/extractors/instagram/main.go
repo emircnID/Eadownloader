@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/bytedance/sonic"
 	"eadownloader/internal/database"
 	"eadownloader/internal/logger"
 	"eadownloader/internal/models"
 	"eadownloader/internal/networking"
 	"eadownloader/internal/util"
+
+	"github.com/bytedance/sonic"
 )
 
 var instagramHost = []string{"instagram", "ddinstagram"}
@@ -133,6 +134,7 @@ func GetIGramPost(ctx *models.ExtractorContext) (*models.Media, error) {
 	}
 
 	media := ctx.NewMedia()
+	media.SetCaption(igramCaption(details))
 	for _, obj := range details.Items {
 		item := media.NewItem()
 		if len(obj.URL) == 0 {

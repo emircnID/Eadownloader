@@ -61,13 +61,8 @@ var (
 )
 
 func ParseGQLMedia(ctx *models.ExtractorContext, data *Media) (*models.Media, error) {
-	var caption string
-	if data.EdgeMediaToCaption != nil && len(data.EdgeMediaToCaption.Edges) > 0 {
-		caption = data.EdgeMediaToCaption.Edges[0].Node.Text
-	}
-
 	media := ctx.NewMedia()
-	media.SetCaption(caption)
+	media.SetCaption(mediaCaption(data))
 
 	switch data.Typename {
 	case "GraphVideo", "XDTGraphVideo":
@@ -124,6 +119,69 @@ func ParseGQLMedia(ctx *models.ExtractorContext, data *Media) (*models.Media, er
 	return media, nil
 }
 
+func mediaCaption(data *Media) string {
+	if data == nil {
+		return ""
+	}
+	if data.EdgeMediaToCaption != nil {
+		for _, edge := range data.EdgeMediaToCaption.Edges {
+			if edge == nil || edge.Node == nil {
+				continue
+			}
+			if text := strings.TrimSpace(edge.Node.Text); text != "" {
+				return text
+			}
+		}
+	}
+	return strings.TrimSpace(data.Title)
+}
+
+func contextCaption(ctxJSON *ContextJSON) string {
+	if ctxJSON == nil || ctxJSON.Context == nil {
+		return ""
+	}
+	for _, candidate := range []string{
+		ctxJSON.Context.Caption,
+		ctxJSON.Context.CaptionTitleLinkified,
+		ctxJSON.Context.Title,
+		ctxJSON.Context.AltText,
+	} {
+		if text := strings.TrimSpace(candidate); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func igramCaption(details *IGramResponse) string {
+	if details == nil {
+		return ""
+	}
+	for _, item := range details.Items {
+		if item == nil {
+			continue
+		}
+		for _, candidate := range []string{
+			item.Caption,
+			item.Title,
+			item.Description,
+		} {
+			if text := strings.TrimSpace(candidate); text != "" {
+				return text
+			}
+		}
+		for _, mediaURL := range item.URL {
+			if mediaURL == nil {
+				continue
+			}
+			if text := strings.TrimSpace(mediaURL.Name); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
 func ParseEmbedGQL(body []byte) (*Media, error) {
 	match := embedPattern.FindSubmatch(body)
 	if len(match) < 2 {
@@ -154,7 +212,11 @@ func ParseEmbedGQL(body []byte) (*Media, error) {
 	if ctxJSON.GqlData.ShortcodeMedia == nil {
 		return nil, fmt.Errorf("shortcode_media not found")
 	}
-	return ctxJSON.GqlData.ShortcodeMedia, nil
+	media := ctxJSON.GqlData.ShortcodeMedia
+	if mediaCaption(media) == "" {
+		media.Title = contextCaption(&ctxJSON)
+	}
+	return media, nil
 }
 
 func IGramBodyFromURL(contentURL string) (io.Reader, error) {

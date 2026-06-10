@@ -95,11 +95,14 @@ type IGramResponse struct {
 }
 
 type IGramMedia struct {
-	URL       []*IGramMediaURL `json:"url"`
-	Thumb     string           `json:"thumb"`
-	Hosting   string           `json:"hosting"`
-	Timestamp int              `json:"timestamp"`
-	Success   *bool            `json:"success"`
+	URL         []*IGramMediaURL `json:"url"`
+	Thumb       string           `json:"thumb"`
+	Hosting     string           `json:"hosting"`
+	Timestamp   int              `json:"timestamp"`
+	Caption     string           `json:"caption"`
+	Title       string           `json:"title"`
+	Description string           `json:"description"`
+	Success     *bool            `json:"success"`
 }
 
 type IGramMediaURL struct {

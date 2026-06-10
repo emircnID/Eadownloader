@@ -24,7 +24,7 @@ quality such as 360p, 720p, 1080p, or request an MP3 audio download.
 - Optional captions and source links
 - Optional whitelist and admin diagnostics
 - Docker Compose deployment with PostgreSQL
-- Optional Netscape cookie files for YouTube, Facebook, and X
+- Optional Netscape cookie files for YouTube, Instagram, Facebook, and X
 - Local-only metrics and profiler ports
 
 ## Requirements
@@ -95,6 +95,7 @@ Place Netscape-format cookie files in the following paths:
 
 ```text
 private/cookies/youtube.txt
+private/cookies/instagram.txt
 private/cookies/facebook.txt
 private/cookies/twitter.txt
 ```

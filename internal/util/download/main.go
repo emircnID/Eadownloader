@@ -59,8 +59,15 @@ func DownloadFile(
 		} else {
 			err = cd.Download(ctx, file, settings.NumConnections)
 			if err != nil {
-				lastErr = err
-				continue
+				ctx.Warnf("chunked download failed, retrying sequentially: %v", err)
+				if resetErr := resetFile(file); resetErr != nil {
+					return "", resetErr
+				}
+				err = downloadSequential(ctx, client, url, file, settings)
+				if err != nil {
+					lastErr = err
+					continue
+				}
 			}
 		}
 

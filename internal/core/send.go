@@ -173,24 +173,35 @@ func recordDownloadEvent(
 	}
 
 	userID := extractorCtx.Chat.ChatID
+	var userFirstName, userLastName, userUsername string
 	if ctx != nil && ctx.EffectiveUser != nil {
 		userID = ctx.EffectiveUser.Id
+		userFirstName = ctx.EffectiveUser.FirstName
+		userLastName = ctx.EffectiveUser.LastName
+		userUsername = ctx.EffectiveUser.Username
 	}
 
-	return database.Q().CreateDownloadEvent(
+	_, err := database.Conn().Exec(
 		extractorCtx.Context,
-		database.CreateDownloadEventParams{
-			ChatID:        extractorCtx.Chat.ChatID,
-			UserID:        userID,
-			ChatType:      extractorCtx.Chat.Type,
-			ExtractorID:   extractorCtx.Extractor.ID,
-			ContentID:     media.ContentID,
-			ContentUrl:    media.ContentURL,
-			ItemCount:     int32(len(messages)),
-			TotalFileSize: totalFileSize,
-			FromCache:     fromCache,
-		},
+		`INSERT INTO download_events (
+			chat_id, user_id, chat_type, extractor_id, content_id, content_url,
+			item_count, total_file_size, from_cache,
+			user_first_name, user_last_name, user_username
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		extractorCtx.Chat.ChatID,
+		userID,
+		extractorCtx.Chat.Type,
+		extractorCtx.Extractor.ID,
+		media.ContentID,
+		media.ContentURL,
+		int32(len(messages)),
+		totalFileSize,
+		fromCache,
+		userFirstName,
+		userLastName,
+		userUsername,
 	)
+	return err
 }
 
 func chunkFormatsForUpload(formats []*models.DownloadedFormat) ([][]*models.DownloadedFormat, error) {

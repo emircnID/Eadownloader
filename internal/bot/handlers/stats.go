@@ -382,9 +382,9 @@ func formatGlobalRecentDownloads() (string, error) {
 			COALESCE(c.username, ''),
 			COALESCE(c.first_name, ''),
 			COALESCE(c.last_name, ''),
-			COALESCE(u.username, ''),
-			COALESCE(u.first_name, ''),
-			COALESCE(u.last_name, '')
+			COALESCE(NULLIF(d.user_username, ''), u.username, ''),
+			COALESCE(NULLIF(d.user_first_name, ''), u.first_name, ''),
+			COALESCE(NULLIF(d.user_last_name, ''), u.last_name, '')
 		FROM download_events d
 		LEFT JOIN chat c ON d.chat_id = c.chat_id
 		LEFT JOIN chat u ON d.user_id = u.chat_id

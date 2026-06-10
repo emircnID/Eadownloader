@@ -210,6 +210,14 @@ type MediaItem struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type MutedUsers struct {
+	UserID    int64
+	Reason    string
+	MutedBy   int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
 type Settings struct {
 	ChatID             int64
 	Nsfw               bool

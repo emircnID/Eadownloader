@@ -11,6 +11,96 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countChatsByType = `-- name: CountChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM chat c
+WHERE c.type = $1
+`
+
+func (q *Queries) CountChatsByType(ctx context.Context, type_ ChatType) (int64, error) {
+	row := q.db.QueryRow(ctx, countChatsByType, type_)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getPlatformStats = `-- name: GetPlatformStats :many
+SELECT
+    m.extractor_id,
+    COUNT(*)::BIGINT AS downloads,
+    COALESCE(SUM(mf.file_size), 0)::BIGINT AS total_size
+FROM media m
+JOIN media_item mi ON mi.media_id = m.id
+JOIN media_format mf ON mf.item_id = mi.id
+WHERE m.created_at >= $1::TIMESTAMP WITH TIME ZONE
+GROUP BY m.extractor_id
+ORDER BY downloads DESC, total_size DESC
+`
+
+type GetPlatformStatsRow struct {
+	ExtractorID string
+	Downloads   int64
+	TotalSize   int64
+}
+
+func (q *Queries) GetPlatformStats(ctx context.Context, sinceDate pgtype.Timestamptz) ([]GetPlatformStatsRow, error) {
+	rows, err := q.db.Query(ctx, getPlatformStats, sinceDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPlatformStatsRow
+	for rows.Next() {
+		var i GetPlatformStatsRow
+		if err := rows.Scan(&i.ExtractorID, &i.Downloads, &i.TotalSize); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentErrors = `-- name: GetRecentErrors :many
+SELECT
+    id,
+    message,
+    occurrences,
+    first_seen,
+    last_seen
+FROM errors
+ORDER BY last_seen DESC
+LIMIT $1
+`
+
+func (q *Queries) GetRecentErrors(ctx context.Context, limitCount int32) ([]Errors, error) {
+	rows, err := q.db.Query(ctx, getRecentErrors, limitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Errors
+	for rows.Next() {
+		var i Errors
+		if err := rows.Scan(
+			&i.ID,
+			&i.Message,
+			&i.Occurrences,
+			&i.FirstSeen,
+			&i.LastSeen,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStats = `-- name: GetStats :one
 WITH private_chats AS (
     SELECT 
@@ -85,91 +175,6 @@ func (q *Queries) GetStats(ctx context.Context, sinceDate pgtype.Timestamptz) (G
 	return i, err
 }
 
-const getPlatformStats = `-- name: GetPlatformStats :many
-SELECT
-    m.extractor_id,
-    COUNT(*)::BIGINT AS downloads,
-    COALESCE(SUM(mf.file_size), 0)::BIGINT AS total_size
-FROM media m
-JOIN media_item mi ON mi.media_id = m.id
-JOIN media_format mf ON mf.item_id = mi.id
-WHERE m.created_at >= $1::TIMESTAMP WITH TIME ZONE
-GROUP BY m.extractor_id
-ORDER BY downloads DESC, total_size DESC
-`
-
-type GetPlatformStatsRow struct {
-	ExtractorID string
-	Downloads   int64
-	TotalSize   int64
-}
-
-func (q *Queries) GetPlatformStats(ctx context.Context, sinceDate pgtype.Timestamptz) ([]GetPlatformStatsRow, error) {
-	rows, err := q.db.Query(ctx, getPlatformStats, sinceDate)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetPlatformStatsRow
-	for rows.Next() {
-		var i GetPlatformStatsRow
-		if err := rows.Scan(&i.ExtractorID, &i.Downloads, &i.TotalSize); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getRecentErrors = `-- name: GetRecentErrors :many
-SELECT
-    id,
-    message,
-    occurrences,
-    first_seen,
-    last_seen
-FROM errors
-ORDER BY last_seen DESC
-LIMIT $1
-`
-
-type GetRecentErrorsRow struct {
-	ID          string
-	Message     string
-	Occurrences int32
-	FirstSeen   pgtype.Timestamp
-	LastSeen    pgtype.Timestamp
-}
-
-func (q *Queries) GetRecentErrors(ctx context.Context, limitCount int32) ([]GetRecentErrorsRow, error) {
-	rows, err := q.db.Query(ctx, getRecentErrors, limitCount)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetRecentErrorsRow
-	for rows.Next() {
-		var i GetRecentErrorsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Message,
-			&i.Occurrences,
-			&i.FirstSeen,
-			&i.LastSeen,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listChatsByType = `-- name: ListChatsByType :many
 SELECT
     c.chat_id,
@@ -214,6 +219,73 @@ func (q *Queries) ListChatsByType(ctx context.Context, arg ListChatsByTypeParams
 	var items []ListChatsByTypeRow
 	for rows.Next() {
 		var i ListChatsByTypeRow
+		if err := rows.Scan(
+			&i.ChatID,
+			&i.Type,
+			&i.Title,
+			&i.Username,
+			&i.FirstName,
+			&i.LastName,
+			&i.Language,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChatsByTypePage = `-- name: ListChatsByTypePage :many
+SELECT
+    c.chat_id,
+    c.type,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name,
+    s.language,
+    c.created_at,
+    c.last_seen_at
+FROM chat c
+JOIN settings s USING (chat_id)
+WHERE c.type = $1
+ORDER BY c.last_seen_at DESC
+LIMIT $3
+OFFSET $2
+`
+
+type ListChatsByTypePageParams struct {
+	Type        ChatType
+	OffsetCount int32
+	LimitCount  int32
+}
+
+type ListChatsByTypePageRow struct {
+	ChatID     int64
+	Type       ChatType
+	Title      string
+	Username   string
+	FirstName  string
+	LastName   string
+	Language   string
+	CreatedAt  pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListChatsByTypePage(ctx context.Context, arg ListChatsByTypePageParams) ([]ListChatsByTypePageRow, error) {
+	rows, err := q.db.Query(ctx, listChatsByTypePage, arg.Type, arg.OffsetCount, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChatsByTypePageRow
+	for rows.Next() {
+		var i ListChatsByTypePageRow
 		if err := rows.Scan(
 			&i.ChatID,
 			&i.Type,

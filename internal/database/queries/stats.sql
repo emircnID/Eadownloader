@@ -65,6 +65,29 @@ WHERE c.type = @type
 ORDER BY c.last_seen_at DESC
 LIMIT @limit_count;
 
+-- name: CountChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM chat c
+WHERE c.type = @type;
+
+-- name: ListChatsByTypePage :many
+SELECT
+    c.chat_id,
+    c.type,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name,
+    s.language,
+    c.created_at,
+    c.last_seen_at
+FROM chat c
+JOIN settings s USING (chat_id)
+WHERE c.type = @type
+ORDER BY c.last_seen_at DESC
+LIMIT @limit_count
+OFFSET @offset_count;
+
 -- name: GetPlatformStats :many
 SELECT
     m.extractor_id,

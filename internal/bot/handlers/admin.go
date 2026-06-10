@@ -30,6 +30,7 @@ const (
 	adminScreenBans       = "bans"
 	adminScreenMutes      = "mutes"
 	adminScreenUser       = "user"
+	adminScreenGroup      = "group"
 
 	adminActionBanConfirm = "ban_confirm"
 	adminActionBan        = "ban"
@@ -37,7 +38,7 @@ const (
 	adminActionMute       = "mute"
 	adminActionUnmute     = "unmute"
 
-	adminRecentUserLimit int32 = 3
+	adminPageSize int32 = 8
 )
 
 func AdminHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
@@ -93,8 +94,12 @@ func resolveAdminCallback(ctx *ext.Context) (string, gotgbot.InlineKeyboardMarku
 		return buildModerationHome()
 	case data == adminScreenUsers:
 		return buildUserList()
+	case strings.HasPrefix(data, adminScreenUsers+":"):
+		return buildUserList(strings.TrimPrefix(data, adminScreenUsers+":"))
 	case data == adminScreenGroups:
 		return buildGroupList()
+	case strings.HasPrefix(data, adminScreenGroups+":"):
+		return buildGroupList(strings.TrimPrefix(data, adminScreenGroups+":"))
 	case data == adminScreenBans:
 		return buildBannedUserList()
 	case data == adminScreenMutes:
@@ -103,6 +108,8 @@ func resolveAdminCallback(ctx *ext.Context) (string, gotgbot.InlineKeyboardMarku
 		return buildSystemPanel()
 	case strings.HasPrefix(data, adminScreenUser+":"):
 		return buildUserProfile(strings.TrimPrefix(data, adminScreenUser+":"))
+	case strings.HasPrefix(data, adminScreenGroup+":"):
+		return buildGroupProfile(strings.TrimPrefix(data, adminScreenGroup+":"))
 	case strings.HasPrefix(data, adminActionBanConfirm+":"):
 		return buildBanConfirm(strings.TrimPrefix(data, adminActionBanConfirm+":"))
 	case strings.HasPrefix(data, adminActionBan+":"):
@@ -133,31 +140,42 @@ func buildAdminHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
+	mutedUsersCount, err := database.Q().CountActiveMutedUsers(context.Background())
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
 
 	text := fmt.Sprintf(
-		"<b>⚙️ EaDownloader Yönetim</b>\n\n"+
-			"<b>📊 Genel Görünüm</b>\n"+
+		"<b>⚙️ EaDownloader Admin</b>\n"+
+			"<i>Operasyon paneli</i>\n\n"+
+			"<b>📊 Genel Durum</b>\n"+
 			"%s\n"+
 			"%s\n"+
 			"%s\n"+
 			"%s\n\n"+
-			"💾 Depolama: <b>%s</b>\n\n"+
-			"Bir modül seçin.",
+			"💾 Toplam boyut: <b>%s</b>\n"+
+			"🔇 Susturulan: <b>%d</b>\n\n"+
+			"Bir bölüm seçin.",
 		metricBar("👤 Kullanıcılar", stats.TotalPrivateChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
 		metricBar("👥 Gruplar", stats.TotalGroupChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
 		metricBar("📥 İndirmeler", stats.TotalDownloads, stats.TotalDownloads),
 		metricBar("⛔ Banlı", bannedUsersCount, max(stats.TotalPrivateChats, 1)),
 		formatBytes(stats.TotalDownloadsSize),
+		mutedUsersCount,
 	)
 
 	return text, gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			{
-				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
-				{Text: "🛡 Moderasyon", CallbackData: adminCallbackPrefix + adminScreenModeration},
+				{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
+				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
 			},
 			{
-				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
+				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
+				{Text: "🚨 Hatalar", CallbackData: statsCallbackPrefix + statsScreenErrors},
+			},
+			{
+				{Text: "🛡 Moderasyon", CallbackData: adminCallbackPrefix + adminScreenModeration},
 				{Text: "🖥 Sistem", CallbackData: adminCallbackPrefix + adminScreenSystem},
 			},
 		},
@@ -220,12 +238,20 @@ func buildModerationHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}, nil
 }
 
-func buildUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
-	rows, err := database.Q().ListChatsByType(
+func buildUserList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	page := parseAdminPage(pageValues...)
+	total, err := database.Q().CountChatsByType(context.Background(), database.ChatTypePrivate)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	page = clampAdminPage(page, total)
+
+	rows, err := database.Q().ListChatsByTypePage(
 		context.Background(),
-		database.ListChatsByTypeParams{
-			Type:       database.ChatTypePrivate,
-			LimitCount: adminRecentUserLimit,
+		database.ListChatsByTypePageParams{
+			Type:        database.ChatTypePrivate,
+			LimitCount:  adminPageSize,
+			OffsetCount: pageOffset(page),
 		},
 	)
 	if err != nil {
@@ -233,10 +259,16 @@ func buildUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 	}
 
 	if len(rows) == 0 {
-		return "<b>👤 Kullanıcılar</b>\n\nHenüz kayıtlı kullanıcı yok.", userListKeyboard(rows), nil
+		return "<b>👤 Kullanıcılar</b>\n\nHenüz kayıtlı kullanıcı yok.", userListKeyboard(rows, page, total), nil
 	}
 
-	text := fmt.Sprintf("<b>👤 Kullanıcılar</b>\nSon aktif %d özel kullanıcı\n\n", len(rows))
+	text := fmt.Sprintf(
+		"<b>👤 Kullanıcılar</b>\n"+
+			"Toplam: <b>%d</b> · Sayfa: <b>%d/%d</b>\n\n",
+		total,
+		page+1,
+		totalAdminPages(total),
+	)
 	for index, row := range rows {
 		status := "Aktif"
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
@@ -246,8 +278,8 @@ func buildUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 		}
 		text += fmt.Sprintf(
 			"<b>%d.</b> %s\n<code>%d</code> · %s · Dil: %s · %s\n\n",
-			index+1,
-			formatAdminChatDisplayName(row),
+			int(pageOffset(page))+index+1,
+			formatAdminPageChatDisplayName(row),
 			row.ChatID,
 			status,
 			html.EscapeString(row.Language),
@@ -255,15 +287,23 @@ func buildUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 		)
 	}
 
-	return strings.TrimSpace(text), userListKeyboard(rows), nil
+	return strings.TrimSpace(text), userListKeyboard(rows, page, total), nil
 }
 
-func buildGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
-	rows, err := database.Q().ListChatsByType(
+func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	page := parseAdminPage(pageValues...)
+	total, err := database.Q().CountChatsByType(context.Background(), database.ChatTypeGroup)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	page = clampAdminPage(page, total)
+
+	rows, err := database.Q().ListChatsByTypePage(
 		context.Background(),
-		database.ListChatsByTypeParams{
-			Type:       database.ChatTypeGroup,
-			LimitCount: adminRecentUserLimit,
+		database.ListChatsByTypePageParams{
+			Type:        database.ChatTypeGroup,
+			LimitCount:  adminPageSize,
+			OffsetCount: pageOffset(page),
 		},
 	)
 	if err != nil {
@@ -274,19 +314,25 @@ func buildGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
 		return "<b>👥 Gruplar</b>\n\nHenüz kayıtlı grup yok.", adminBackKeyboard(adminScreenHome), nil
 	}
 
-	text := fmt.Sprintf("<b>👥 Gruplar</b>\nSon aktif %d grup\n\n", len(rows))
+	text := fmt.Sprintf(
+		"<b>👥 Gruplar</b>\n"+
+			"Toplam: <b>%d</b> · Sayfa: <b>%d/%d</b>\n\n",
+		total,
+		page+1,
+		totalAdminPages(total),
+	)
 	for index, row := range rows {
 		text += fmt.Sprintf(
 			"<b>%d.</b> %s\n<code>%d</code> · Dil: %s · %s\n\n",
-			index+1,
-			formatAdminChatDisplayName(row),
+			int(pageOffset(page))+index+1,
+			formatAdminPageChatDisplayName(row),
 			row.ChatID,
 			html.EscapeString(row.Language),
 			formatTimeAgo(row.LastSeenAt),
 		)
 	}
 
-	return strings.TrimSpace(text), adminBackKeyboard(adminScreenHome), nil
+	return strings.TrimSpace(text), groupListKeyboard(rows, page, total), nil
 }
 
 func buildMutedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -393,6 +439,36 @@ func buildUserProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error
 	)
 
 	return text, userProfileKeyboard(user.ChatID, banned, muted), nil
+}
+
+func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	groupID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+
+	group, err := database.Q().GetChatByID(context.Background(), groupID)
+	if err != nil {
+		return buildGroupList()
+	}
+
+	text := fmt.Sprintf(
+		"<b>👥 Grup Detayı</b>\n\n"+
+			"%s\n"+
+			"ID: <code>%d</code>\n"+
+			"Kullanıcı adı: %s\n"+
+			"Dil: %s\n"+
+			"Kayıt: %s\n"+
+			"Son aktiflik: %s",
+		formatUserProfileDisplayName(group),
+		group.ChatID,
+		formatUsername(group.Username),
+		html.EscapeString(group.Language),
+		formatTimeAgo(group.CreatedAt),
+		formatTimeAgo(group.LastSeenAt),
+	)
+
+	return text, groupProfileKeyboard(), nil
 }
 
 func buildUnknownUserProfile(userID int64) (string, gotgbot.InlineKeyboardMarkup, error) {
@@ -558,13 +634,21 @@ func unmuteUserFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup,
 	return buildUserProfile(value)
 }
 
-func userListKeyboard(rows []database.ListChatsByTypeRow) gotgbot.InlineKeyboardMarkup {
+func userListKeyboard(rows []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
 	buttons := numberedUserButtons(rows)
+	buttons = append(buttons, adminPaginationRows(adminScreenUsers, page, total)...)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
 		{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
 		{Text: "🔇 Susturulanlar", CallbackData: adminCallbackPrefix + adminScreenMutes},
 	})
-	buttons = append(buttons, adminBackRow(adminScreenModeration))
+	buttons = append(buttons, adminBackRow(adminScreenHome))
+	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
+}
+
+func groupListKeyboard(rows []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
+	buttons := numberedGroupButtons(rows)
+	buttons = append(buttons, adminPaginationRows(adminScreenGroups, page, total)...)
+	buttons = append(buttons, adminBackRow(adminScreenHome))
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
@@ -604,12 +688,23 @@ func mutedUserListKeyboard(rows []database.ListActiveMutedUsersRow) gotgbot.Inli
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
-func numberedUserButtons(rows []database.ListChatsByTypeRow) [][]gotgbot.InlineKeyboardButton {
+func numberedUserButtons(rows []database.ListChatsByTypePageRow) [][]gotgbot.InlineKeyboardButton {
 	buttons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
 	for index, row := range rows {
 		buttons = append(buttons, gotgbot.InlineKeyboardButton{
 			Text:         fmt.Sprintf("👤 %d", index+1),
 			CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(row.ChatID, 10),
+		})
+	}
+	return chunkButtons(buttons, 3)
+}
+
+func numberedGroupButtons(rows []database.ListChatsByTypePageRow) [][]gotgbot.InlineKeyboardButton {
+	buttons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
+	for index, row := range rows {
+		buttons = append(buttons, gotgbot.InlineKeyboardButton{
+			Text:         fmt.Sprintf("👥 %d", index+1),
+			CallbackData: adminCallbackPrefix + adminScreenGroup + ":" + strconv.FormatInt(row.ChatID, 10),
 		})
 	}
 	return chunkButtons(buttons, 3)
@@ -648,12 +743,83 @@ func userProfileKeyboard(userID int64, banned bool, muted bool) gotgbot.InlineKe
 	}
 }
 
+func groupProfileKeyboard() gotgbot.InlineKeyboardMarkup {
+	return gotgbot.InlineKeyboardMarkup{
+		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
+				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
+			},
+			adminBackRow(adminScreenHome),
+		},
+	}
+}
+
 func adminBackKeyboard(screen string) gotgbot.InlineKeyboardMarkup {
 	return gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
 			adminBackRow(screen),
 		},
 	}
+}
+
+func adminPaginationRows(screen string, page int32, total int64) [][]gotgbot.InlineKeyboardButton {
+	totalPages := totalAdminPages(total)
+	if totalPages <= 1 {
+		return nil
+	}
+
+	row := make([]gotgbot.InlineKeyboardButton, 0, 3)
+	if page > 0 {
+		row = append(row, gotgbot.InlineKeyboardButton{
+			Text:         "⬅️ Önceki",
+			CallbackData: adminCallbackPrefix + screen + ":" + strconv.FormatInt(int64(page-1), 10),
+		})
+	}
+	row = append(row, gotgbot.InlineKeyboardButton{
+		Text:         fmt.Sprintf("%d/%d", page+1, totalPages),
+		CallbackData: adminCallbackPrefix + screen + ":" + strconv.FormatInt(int64(page), 10),
+	})
+	if page+1 < totalPages {
+		row = append(row, gotgbot.InlineKeyboardButton{
+			Text:         "Sonraki ➡️",
+			CallbackData: adminCallbackPrefix + screen + ":" + strconv.FormatInt(int64(page+1), 10),
+		})
+	}
+	return [][]gotgbot.InlineKeyboardButton{row}
+}
+
+func parseAdminPage(values ...string) int32 {
+	if len(values) == 0 {
+		return 0
+	}
+	page, err := strconv.ParseInt(strings.TrimSpace(values[0]), 10, 32)
+	if err != nil || page < 0 {
+		return 0
+	}
+	return int32(page)
+}
+
+func clampAdminPage(page int32, total int64) int32 {
+	totalPages := totalAdminPages(total)
+	if totalPages == 0 {
+		return 0
+	}
+	if page >= totalPages {
+		return totalPages - 1
+	}
+	return page
+}
+
+func totalAdminPages(total int64) int32 {
+	if total <= 0 {
+		return 1
+	}
+	return int32((total + int64(adminPageSize) - 1) / int64(adminPageSize))
+}
+
+func pageOffset(page int32) int32 {
+	return page * adminPageSize
 }
 
 func adminBackRow(screen string) []gotgbot.InlineKeyboardButton {
@@ -704,7 +870,31 @@ func formatAdminChatDisplayName(chat database.ListChatsByTypeRow) string {
 	return result
 }
 
+func formatAdminPageChatDisplayName(chat database.ListChatsByTypePageRow) string {
+	name := adminPageChatDisplayLabel(chat)
+	result := "<b>" + html.EscapeString(name) + "</b>"
+	username := strings.TrimSpace(chat.Username)
+	if username != "" && !strings.Contains(strings.ToLower(name), strings.ToLower("@"+username)) {
+		result += " @" + html.EscapeString(username)
+	}
+	return result
+}
+
 func adminChatDisplayLabel(chat database.ListChatsByTypeRow) string {
+	name := strings.TrimSpace(chat.Title)
+	if name == "" {
+		name = strings.TrimSpace(strings.Join([]string{chat.FirstName, chat.LastName}, " "))
+	}
+	if name == "" && chat.Username != "" {
+		name = "@" + chat.Username
+	}
+	if name == "" {
+		name = strconv.FormatInt(chat.ChatID, 10)
+	}
+	return name
+}
+
+func adminPageChatDisplayLabel(chat database.ListChatsByTypePageRow) string {
 	name := strings.TrimSpace(chat.Title)
 	if name == "" {
 		name = strings.TrimSpace(strings.Join([]string{chat.FirstName, chat.LastName}, " "))

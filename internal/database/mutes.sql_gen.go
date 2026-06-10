@@ -32,17 +32,9 @@ WHERE user_id = $1
 LIMIT 1
 `
 
-type GetActiveMuteRow struct {
-	UserID    int64
-	Reason    string
-	MutedBy   int64
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-}
-
-func (q *Queries) GetActiveMute(ctx context.Context, userID int64) (GetActiveMuteRow, error) {
+func (q *Queries) GetActiveMute(ctx context.Context, userID int64) (MutedUsers, error) {
 	row := q.db.QueryRow(ctx, getActiveMute, userID)
-	var i GetActiveMuteRow
+	var i MutedUsers
 	err := row.Scan(
 		&i.UserID,
 		&i.Reason,

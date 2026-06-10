@@ -209,7 +209,7 @@ func formatChatList(chatType database.ChatType, page int32) (string, int32, erro
 	)
 	for i, chat := range chats {
 		message += fmt.Sprintf(
-			"<b>%d.</b> %s\n%s\n\nID : <code>%d</code>\n\n",
+			"<b>%d.</b> %s\n%s\nID : <code>%d</code>\n\n",
 			int(statsPageOffset(page))+i+1,
 			formatAdminPageChatDisplayName(chat),
 			formatTimeAgo(chat.LastSeenAt),

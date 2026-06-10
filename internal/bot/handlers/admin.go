@@ -278,7 +278,7 @@ func buildUserList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, 
 			status = "Susturuldu: " + formatDurationLeft(activeMute.ExpiresAt.Time)
 		}
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n%s · %s\n\nID : <code>%d</code>\n\n",
+			"<b>%d.</b> %s\n%s · %s\nID : <code>%d</code>\n\n",
 			int(pageOffset(page))+index+1,
 			formatAdminPageChatDisplayName(row),
 			status,
@@ -323,7 +323,7 @@ func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup,
 	)
 	for index, row := range rows {
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n%s\n\nID : <code>%d</code>\n\n",
+			"<b>%d.</b> %s\n%s\nID : <code>%d</code>\n\n",
 			int(pageOffset(page))+index+1,
 			formatAdminPageChatDisplayName(row),
 			formatTimeAgo(row.LastSeenAt),
@@ -1015,7 +1015,7 @@ func formatMutedUserDisplayName(row database.ListActiveMutedUsersRow) string {
 }
 
 func formatAdminChatDisplayName(chat database.ListChatsByTypeRow) string {
-	name := adminChatDisplayLabel(chat)
+	name := normalizeDisplayLabel(adminChatDisplayLabel(chat))
 	result := "<b>" + html.EscapeString(name) + "</b>"
 	username := strings.TrimSpace(chat.Username)
 	if username != "" && !strings.Contains(strings.ToLower(name), strings.ToLower("@"+username)) {
@@ -1025,13 +1025,17 @@ func formatAdminChatDisplayName(chat database.ListChatsByTypeRow) string {
 }
 
 func formatAdminPageChatDisplayName(chat database.ListChatsByTypePageRow) string {
-	name := adminPageChatDisplayLabel(chat)
+	name := normalizeDisplayLabel(adminPageChatDisplayLabel(chat))
 	result := "<b>" + html.EscapeString(name) + "</b>"
 	username := strings.TrimSpace(chat.Username)
 	if username != "" && !strings.Contains(strings.ToLower(name), strings.ToLower("@"+username)) {
 		result += " @" + html.EscapeString(username)
 	}
 	return result
+}
+
+func normalizeDisplayLabel(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
 func adminChatDisplayLabel(chat database.ListChatsByTypeRow) string {

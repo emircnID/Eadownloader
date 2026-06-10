@@ -34,7 +34,32 @@ SELECT
     c.first_name,
     c.last_name
 FROM muted_users m
-LEFT JOIN chat c ON c.chat_id = m.user_id AND c.type = 'private'
+JOIN chat c ON c.chat_id = m.user_id AND c.type = 'private'
 WHERE m.expires_at > NOW()
+ORDER BY m.expires_at ASC
+LIMIT @limit_count;
+
+-- name: CountActiveMutedChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM muted_users m
+JOIN chat c ON c.chat_id = m.user_id
+WHERE c.type = @type
+  AND m.expires_at > NOW();
+
+-- name: ListActiveMutedChatsByType :many
+SELECT
+    m.user_id,
+    m.reason,
+    m.muted_by,
+    m.expires_at,
+    m.created_at,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name
+FROM muted_users m
+JOIN chat c ON c.chat_id = m.user_id
+WHERE c.type = @type
+  AND m.expires_at > NOW()
 ORDER BY m.expires_at ASC
 LIMIT @limit_count;

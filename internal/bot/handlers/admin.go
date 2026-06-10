@@ -29,6 +29,8 @@ const (
 	adminScreenGroups     = "groups"
 	adminScreenBans       = "bans"
 	adminScreenMutes      = "mutes"
+	adminScreenGroupBans  = "group_bans"
+	adminScreenGroupMutes = "group_mutes"
 	adminScreenUser       = "user"
 	adminScreenGroup      = "group"
 
@@ -37,6 +39,12 @@ const (
 	adminActionUnban      = "unban"
 	adminActionMute       = "mute"
 	adminActionUnmute     = "unmute"
+
+	adminActionGroupBanConfirm = "group_ban_confirm"
+	adminActionGroupBan        = "group_ban"
+	adminActionGroupUnban      = "group_unban"
+	adminActionGroupMute       = "group_mute"
+	adminActionGroupUnmute     = "group_unmute"
 
 	adminPageSize      int32 = 5
 	adminActivityLimit int32 = 5
@@ -105,6 +113,10 @@ func resolveAdminCallback(ctx *ext.Context) (string, gotgbot.InlineKeyboardMarku
 		return buildBannedUserList()
 	case data == adminScreenMutes:
 		return buildMutedUserList()
+	case data == adminScreenGroupBans:
+		return buildBannedGroupList()
+	case data == adminScreenGroupMutes:
+		return buildMutedGroupList()
 	case data == adminScreenSystem:
 		return buildSystemPanel()
 	case strings.HasPrefix(data, adminScreenUser+":"):
@@ -121,6 +133,16 @@ func resolveAdminCallback(ctx *ext.Context) (string, gotgbot.InlineKeyboardMarku
 		return muteUserFromCallback(ctx, strings.TrimPrefix(data, adminActionMute+":"))
 	case strings.HasPrefix(data, adminActionUnmute+":"):
 		return unmuteUserFromCallback(strings.TrimPrefix(data, adminActionUnmute+":"))
+	case strings.HasPrefix(data, adminActionGroupBanConfirm+":"):
+		return buildGroupBanConfirm(strings.TrimPrefix(data, adminActionGroupBanConfirm+":"))
+	case strings.HasPrefix(data, adminActionGroupBan+":"):
+		return banGroupFromCallback(ctx, strings.TrimPrefix(data, adminActionGroupBan+":"))
+	case strings.HasPrefix(data, adminActionGroupUnban+":"):
+		return unbanGroupFromCallback(strings.TrimPrefix(data, adminActionGroupUnban+":"))
+	case strings.HasPrefix(data, adminActionGroupMute+":"):
+		return muteGroupFromCallback(ctx, strings.TrimPrefix(data, adminActionGroupMute+":"))
+	case strings.HasPrefix(data, adminActionGroupUnmute+":"):
+		return unmuteGroupFromCallback(strings.TrimPrefix(data, adminActionGroupUnmute+":"))
 	default:
 		return buildAdminHome()
 	}
@@ -137,11 +159,11 @@ func buildAdminHome() (string, gotgbot.InlineKeyboardMarkup, error) {
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	bannedUsersCount, err := database.Q().CountBannedUsers(context.Background())
+	bannedUsersCount, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	mutedUsersCount, err := database.Q().CountActiveMutedUsers(context.Background())
+	mutedUsersCount, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -205,11 +227,11 @@ func metricBar(label string, value int64, maxValue int64) string {
 }
 
 func buildModerationHome() (string, gotgbot.InlineKeyboardMarkup, error) {
-	bannedUsersCount, err := database.Q().CountBannedUsers(context.Background())
+	bannedUsersCount, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	mutedUsersCount, err := database.Q().CountActiveMutedUsers(context.Background())
+	mutedUsersCount, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -323,10 +345,17 @@ func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup,
 		totalAdminPages(total),
 	)
 	for index, row := range rows {
+		status := "Aktif"
+		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
+			status = "Banlı"
+		} else if activeMute, err := database.Q().GetActiveMute(context.Background(), row.ChatID); err == nil {
+			status = "Susturuldu: " + formatDurationLeft(activeMute.ExpiresAt.Time)
+		}
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n%s\nID : <code>%d</code>\n\n",
+			"<b>%d.</b> %s\n%s · %s\nID : <code>%d</code>\n\n",
 			int(pageOffset(page))+index+1,
 			formatAdminPageChatDisplayName(row),
+			status,
 			formatTimeAgo(row.LastSeenAt),
 			row.ChatID,
 		)
@@ -335,8 +364,72 @@ func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup,
 	return strings.TrimSpace(text), groupListKeyboard(rows, page, total), nil
 }
 
+func buildMutedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
+	total, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypeGroup)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	rows, err := database.Q().ListActiveMutedChatsByType(
+		context.Background(),
+		database.ListActiveMutedChatsByTypeParams{Type: database.ChatTypeGroup, LimitCount: statsListLimit},
+	)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+
+	if len(rows) == 0 {
+		return "<b>🔇 Susturulan Gruplar</b>\n\nAktif susturulan grup yok.", groupModerationListKeyboard(), nil
+	}
+
+	text := fmt.Sprintf("<b>🔇 Susturulan Gruplar</b>\nToplam: <b>%d</b>\n\n", total)
+	for index, row := range rows {
+		text += fmt.Sprintf(
+			"<b>%d.</b> %s\n<code>%d</code> · kalan: %s\nSebep: %s\n\n",
+			index+1,
+			formatBannedChatDisplayName(row.UserID, row.Title, row.Username, row.FirstName, row.LastName),
+			row.UserID,
+			formatDurationLeft(row.ExpiresAt.Time),
+			html.EscapeString(row.Reason),
+		)
+	}
+
+	return strings.TrimSpace(text), groupModerationListKeyboard(), nil
+}
+
+func buildBannedGroupList() (string, gotgbot.InlineKeyboardMarkup, error) {
+	total, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypeGroup)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	rows, err := database.Q().ListBannedChatsByType(
+		context.Background(),
+		database.ListBannedChatsByTypeParams{Type: database.ChatTypeGroup, LimitCount: statsListLimit},
+	)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+
+	if len(rows) == 0 {
+		return "<b>⛔ Banlı Gruplar</b>\n\nHenüz banlı grup yok.", groupModerationListKeyboard(), nil
+	}
+
+	text := fmt.Sprintf("<b>⛔ Banlı Gruplar</b>\nToplam: <b>%d</b>\n\n", total)
+	for index, row := range rows {
+		text += fmt.Sprintf(
+			"<b>%d.</b> %s\n<code>%d</code> · %s\nSebep: %s\n\n",
+			index+1,
+			formatBannedChatDisplayName(row.UserID, row.Title, row.Username, row.FirstName, row.LastName),
+			row.UserID,
+			formatTimeAgo(row.CreatedAt),
+			html.EscapeString(row.Reason),
+		)
+	}
+
+	return strings.TrimSpace(text), groupModerationListKeyboard(), nil
+}
+
 func buildMutedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
-	total, err := database.Q().CountActiveMutedUsers(context.Background())
+	total, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -365,7 +458,7 @@ func buildMutedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
 }
 
 func buildBannedUserList() (string, gotgbot.InlineKeyboardMarkup, error) {
-	total, err := database.Q().CountBannedUsers(context.Background())
+	total, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -475,6 +568,21 @@ func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, erro
 		return buildGroupList()
 	}
 
+	banned, err := database.Q().IsUserBanned(context.Background(), group.ChatID)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	muteExpiresAt, muted, err := getActiveMuteExpiresAt(group.ChatID)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	status := "Aktif"
+	if banned {
+		status = "Banlı"
+	} else if muted {
+		status = "Susturuldu · kalan: " + formatDurationLeft(muteExpiresAt)
+	}
+
 	summary, err := database.Q().GetChatDownloadSummary(context.Background(), group.ChatID)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
@@ -499,6 +607,7 @@ func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, erro
 			"%s\n"+
 			"ID: <code>%d</code>\n"+
 			"Kullanıcı adı: %s\n"+
+			"Durum: %s\n"+
 			"Kayıt: %s\n"+
 			"Son aktiflik: %s\n\n"+
 			"%s\n\n"+
@@ -507,6 +616,7 @@ func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, erro
 		formatUserProfileDisplayName(group),
 		group.ChatID,
 		formatUsername(group.Username),
+		status,
 		formatTimeAgo(group.CreatedAt),
 		formatTimeAgo(group.LastSeenAt),
 		formatDownloadActivitySummary(summary.Downloads, summary.Items, summary.TotalSize, summary.LastDownloadAt),
@@ -514,7 +624,7 @@ func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, erro
 		formatChatRecentDownloadEvents(recentDownloads),
 	)
 
-	return text, groupProfileKeyboard(), nil
+	return text, groupProfileKeyboard(group.ChatID, banned, muted), nil
 }
 
 func formatDownloadActivitySummary(downloads int64, items int64, totalSize int64, lastDownloadAt pgtype.Timestamptz) string {
@@ -711,12 +821,37 @@ func buildBanConfirm(value string) (string, gotgbot.InlineKeyboardMarkup, error)
 	}, nil
 }
 
+func buildGroupBanConfirm(value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	groupID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+
+	text := fmt.Sprintf(
+		"<b>⛔ Grup Ban Onayı</b>\n\n"+
+			"Grup ID: <code>%d</code>\n\n"+
+			"Bu grupta bot komutları ve link indirme işlemleri engellenecek.",
+		groupID,
+	)
+	return text, gotgbot.InlineKeyboardMarkup{
+		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: "⛔ Grubu Banla", CallbackData: adminCallbackPrefix + adminActionGroupBan + ":" + strconv.FormatInt(groupID, 10)},
+			},
+			{
+				{Text: "👥 Grup Profili", CallbackData: adminCallbackPrefix + adminScreenGroup + ":" + strconv.FormatInt(groupID, 10)},
+			},
+			adminHomeRow(),
+		},
+	}, nil
+}
+
 func buildSystemPanel() (string, gotgbot.InlineKeyboardMarkup, error) {
-	bannedUsersCount, err := database.Q().CountBannedUsers(context.Background())
+	bannedUsersCount, err := database.Q().CountBannedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	mutedUsersCount, err := database.Q().CountActiveMutedUsers(context.Background())
+	mutedUsersCount, err := database.Q().CountActiveMutedChatsByType(context.Background(), database.ChatTypePrivate)
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
@@ -825,6 +960,77 @@ func unmuteUserFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup,
 	return buildUserProfile(value)
 }
 
+func banGroupFromCallback(ctx *ext.Context, value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	groupID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+
+	_, err = database.Q().BanUser(
+		context.Background(),
+		database.BanUserParams{
+			UserID:   groupID,
+			Reason:   "admin panel group",
+			BannedBy: ctx.CallbackQuery.From.Id,
+		},
+	)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	return buildGroupProfile(value)
+}
+
+func unbanGroupFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	groupID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+	if err := database.Q().UnbanUser(context.Background(), groupID); err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	return buildGroupProfile(value)
+}
+
+func muteGroupFromCallback(ctx *ext.Context, value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
+		return buildGroupList()
+	}
+	duration, err := parseCommandDuration(parts[0])
+	if err != nil {
+		return buildGroupList()
+	}
+	groupID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+
+	err = database.Q().MuteUser(
+		context.Background(),
+		database.MuteUserParams{
+			UserID:    groupID,
+			Reason:    "admin panel group",
+			MutedBy:   ctx.CallbackQuery.From.Id,
+			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(duration), Valid: true},
+		},
+	)
+	if err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	return buildGroupProfile(parts[1])
+}
+
+func unmuteGroupFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup, error) {
+	groupID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return buildGroupList()
+	}
+	if err := database.Q().UnmuteUser(context.Background(), groupID); err != nil {
+		return "", gotgbot.InlineKeyboardMarkup{}, err
+	}
+	return buildGroupProfile(value)
+}
+
 func userListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
 	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 4)
 	buttons = append(buttons, adminPaginationRows(adminScreenUsers, page, total)...)
@@ -837,10 +1043,29 @@ func userListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total int
 }
 
 func groupListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
-	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 2)
+	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 3)
 	buttons = append(buttons, adminPaginationRows(adminScreenGroups, page, total)...)
+	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
+		{Text: "⛔ Banlı Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupBans},
+		{Text: "🔇 Susturulan Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupMutes},
+	})
 	buttons = append(buttons, adminHomeRow())
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
+}
+
+func groupModerationListKeyboard() gotgbot.InlineKeyboardMarkup {
+	return gotgbot.InlineKeyboardMarkup{
+		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
+			},
+			{
+				{Text: "⛔ Banlı Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupBans},
+				{Text: "🔇 Susturulan Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroupMutes},
+			},
+			adminHomeRow(),
+		},
+	}
 }
 
 func bannedUserListKeyboard(_ []database.ListBannedUsersRow) gotgbot.InlineKeyboardMarkup {
@@ -896,9 +1121,30 @@ func userProfileKeyboard(userID int64, banned bool, muted bool) gotgbot.InlineKe
 	}
 }
 
-func groupProfileKeyboard() gotgbot.InlineKeyboardMarkup {
+func groupProfileKeyboard(groupID int64, banned bool, muted bool) gotgbot.InlineKeyboardMarkup {
+	actionText := "⛔ Grubu Banla"
+	actionData := adminCallbackPrefix + adminActionGroupBanConfirm + ":" + strconv.FormatInt(groupID, 10)
+	if banned {
+		actionText = "✅ Grup Banını Kaldır"
+		actionData = adminCallbackPrefix + adminActionGroupUnban + ":" + strconv.FormatInt(groupID, 10)
+	}
+
+	muteRow := []gotgbot.InlineKeyboardButton{
+		{Text: "🔇 1h Sustur", CallbackData: adminCallbackPrefix + adminActionGroupMute + ":1h:" + strconv.FormatInt(groupID, 10)},
+		{Text: "🔇 24h Sustur", CallbackData: adminCallbackPrefix + adminActionGroupMute + ":24h:" + strconv.FormatInt(groupID, 10)},
+	}
+	if muted {
+		muteRow = []gotgbot.InlineKeyboardButton{
+			{Text: "🔊 Susturmayı Kaldır", CallbackData: adminCallbackPrefix + adminActionGroupUnmute + ":" + strconv.FormatInt(groupID, 10)},
+		}
+	}
+
 	return gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+			{
+				{Text: actionText, CallbackData: actionData},
+			},
+			muteRow,
 			{
 				{Text: "👥 Gruplar", CallbackData: adminCallbackPrefix + adminScreenGroups},
 				{Text: "📊 Analitik", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll},
@@ -988,7 +1234,7 @@ func pageOffset(page int32) int32 {
 
 func adminHomeRow() []gotgbot.InlineKeyboardButton {
 	return []gotgbot.InlineKeyboardButton{
-		{Text: "⚙️ Admin", CallbackData: adminCallbackPrefix + adminScreenHome},
+		{Text: "🏠 Anamenü", CallbackData: adminCallbackPrefix + adminScreenHome},
 	}
 }
 
@@ -1013,6 +1259,25 @@ func formatMutedUserDisplayName(row database.ListActiveMutedUsersRow) string {
 		row.UserID,
 		html.EscapeString(name),
 	)
+}
+
+func formatBannedChatDisplayName(chatID int64, title string, username string, firstName string, lastName string) string {
+	name := strings.TrimSpace(title)
+	if name == "" {
+		name = strings.TrimSpace(strings.Join([]string{firstName, lastName}, " "))
+	}
+	if name == "" && strings.TrimSpace(username) != "" {
+		name = "@" + strings.TrimSpace(username)
+	}
+	if name == "" {
+		name = strconv.FormatInt(chatID, 10)
+	}
+
+	result := "<b>" + html.EscapeString(normalizeDisplayLabel(name)) + "</b>"
+	if username = strings.TrimSpace(username); username != "" && !strings.Contains(strings.ToLower(name), strings.ToLower("@"+username)) {
+		result += " @" + html.EscapeString(username)
+	}
+	return result
 }
 
 func formatAdminChatDisplayName(chat database.ListChatsByTypeRow) string {
@@ -1079,9 +1344,9 @@ func getActiveMuteExpiresAt(userID int64) (time.Time, bool, error) {
 }
 
 func bannedUserDisplayLabel(row database.ListBannedUsersRow) string {
-	name := strings.TrimSpace(joinValidTexts(row.FirstName, row.LastName))
-	if name == "" && row.Username.Valid && row.Username.String != "" {
-		name = "@" + row.Username.String
+	name := strings.TrimSpace(strings.Join([]string{row.FirstName, row.LastName}, " "))
+	if name == "" && strings.TrimSpace(row.Username) != "" {
+		name = "@" + strings.TrimSpace(row.Username)
 	}
 	if name == "" {
 		name = strconv.FormatInt(row.UserID, 10)

@@ -39,6 +39,20 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (BannedUsers, 
 	return i, err
 }
 
+const countBannedChatsByType = `-- name: CountBannedChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM banned_users b
+JOIN chat c ON c.chat_id = b.user_id
+WHERE c.type = $1
+`
+
+func (q *Queries) CountBannedChatsByType(ctx context.Context, type_ ChatType) (int64, error) {
+	row := q.db.QueryRow(ctx, countBannedChatsByType, type_)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countBannedUsers = `-- name: CountBannedUsers :one
 SELECT COUNT(*)::BIGINT
 FROM banned_users
@@ -66,6 +80,68 @@ func (q *Queries) IsUserBanned(ctx context.Context, userID int64) (bool, error) 
 	return column_1, err
 }
 
+const listBannedChatsByType = `-- name: ListBannedChatsByType :many
+SELECT
+    b.user_id,
+    b.reason,
+    b.banned_by,
+    b.created_at,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name
+FROM banned_users b
+JOIN chat c ON c.chat_id = b.user_id
+WHERE c.type = $1
+ORDER BY b.created_at DESC
+LIMIT $2
+`
+
+type ListBannedChatsByTypeParams struct {
+	Type       ChatType
+	LimitCount int32
+}
+
+type ListBannedChatsByTypeRow struct {
+	UserID    int64
+	Reason    string
+	BannedBy  int64
+	CreatedAt pgtype.Timestamptz
+	Title     string
+	Username  string
+	FirstName string
+	LastName  string
+}
+
+func (q *Queries) ListBannedChatsByType(ctx context.Context, arg ListBannedChatsByTypeParams) ([]ListBannedChatsByTypeRow, error) {
+	rows, err := q.db.Query(ctx, listBannedChatsByType, arg.Type, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBannedChatsByTypeRow
+	for rows.Next() {
+		var i ListBannedChatsByTypeRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Reason,
+			&i.BannedBy,
+			&i.CreatedAt,
+			&i.Title,
+			&i.Username,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBannedUsers = `-- name: ListBannedUsers :many
 SELECT
     b.user_id,
@@ -76,7 +152,7 @@ SELECT
     c.first_name,
     c.last_name
 FROM banned_users b
-LEFT JOIN chat c ON c.chat_id = b.user_id AND c.type = 'private'
+JOIN chat c ON c.chat_id = b.user_id AND c.type = 'private'
 ORDER BY b.created_at DESC
 LIMIT $1
 `
@@ -86,9 +162,9 @@ type ListBannedUsersRow struct {
 	Reason    string
 	BannedBy  int64
 	CreatedAt pgtype.Timestamptz
-	Username  pgtype.Text
-	FirstName pgtype.Text
-	LastName  pgtype.Text
+	Username  string
+	FirstName string
+	LastName  string
 }
 
 func (q *Queries) ListBannedUsers(ctx context.Context, limitCount int32) ([]ListBannedUsersRow, error) {

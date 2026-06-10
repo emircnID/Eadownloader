@@ -32,6 +32,28 @@ SELECT
     c.first_name,
     c.last_name
 FROM banned_users b
-LEFT JOIN chat c ON c.chat_id = b.user_id AND c.type = 'private'
+JOIN chat c ON c.chat_id = b.user_id AND c.type = 'private'
+ORDER BY b.created_at DESC
+LIMIT @limit_count;
+
+-- name: CountBannedChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM banned_users b
+JOIN chat c ON c.chat_id = b.user_id
+WHERE c.type = @type;
+
+-- name: ListBannedChatsByType :many
+SELECT
+    b.user_id,
+    b.reason,
+    b.banned_by,
+    b.created_at,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name
+FROM banned_users b
+JOIN chat c ON c.chat_id = b.user_id
+WHERE c.type = @type
 ORDER BY b.created_at DESC
 LIMIT @limit_count;

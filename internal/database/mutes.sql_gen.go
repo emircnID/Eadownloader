@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActiveMutedChatsByType = `-- name: CountActiveMutedChatsByType :one
+SELECT COUNT(*)::BIGINT
+FROM muted_users m
+JOIN chat c ON c.chat_id = m.user_id
+WHERE c.type = $1
+  AND m.expires_at > NOW()
+`
+
+func (q *Queries) CountActiveMutedChatsByType(ctx context.Context, type_ ChatType) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMutedChatsByType, type_)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countActiveMutedUsers = `-- name: CountActiveMutedUsers :one
 SELECT COUNT(*)::BIGINT
 FROM muted_users
@@ -45,6 +60,72 @@ func (q *Queries) GetActiveMute(ctx context.Context, userID int64) (MutedUsers, 
 	return i, err
 }
 
+const listActiveMutedChatsByType = `-- name: ListActiveMutedChatsByType :many
+SELECT
+    m.user_id,
+    m.reason,
+    m.muted_by,
+    m.expires_at,
+    m.created_at,
+    c.title,
+    c.username,
+    c.first_name,
+    c.last_name
+FROM muted_users m
+JOIN chat c ON c.chat_id = m.user_id
+WHERE c.type = $1
+  AND m.expires_at > NOW()
+ORDER BY m.expires_at ASC
+LIMIT $2
+`
+
+type ListActiveMutedChatsByTypeParams struct {
+	Type       ChatType
+	LimitCount int32
+}
+
+type ListActiveMutedChatsByTypeRow struct {
+	UserID    int64
+	Reason    string
+	MutedBy   int64
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+	Title     string
+	Username  string
+	FirstName string
+	LastName  string
+}
+
+func (q *Queries) ListActiveMutedChatsByType(ctx context.Context, arg ListActiveMutedChatsByTypeParams) ([]ListActiveMutedChatsByTypeRow, error) {
+	rows, err := q.db.Query(ctx, listActiveMutedChatsByType, arg.Type, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveMutedChatsByTypeRow
+	for rows.Next() {
+		var i ListActiveMutedChatsByTypeRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Reason,
+			&i.MutedBy,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.Title,
+			&i.Username,
+			&i.FirstName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveMutedUsers = `-- name: ListActiveMutedUsers :many
 SELECT
     m.user_id,
@@ -56,7 +137,7 @@ SELECT
     c.first_name,
     c.last_name
 FROM muted_users m
-LEFT JOIN chat c ON c.chat_id = m.user_id AND c.type = 'private'
+JOIN chat c ON c.chat_id = m.user_id AND c.type = 'private'
 WHERE m.expires_at > NOW()
 ORDER BY m.expires_at ASC
 LIMIT $1
@@ -68,9 +149,9 @@ type ListActiveMutedUsersRow struct {
 	MutedBy   int64
 	ExpiresAt pgtype.Timestamptz
 	CreatedAt pgtype.Timestamptz
-	Username  pgtype.Text
-	FirstName pgtype.Text
-	LastName  pgtype.Text
+	Username  string
+	FirstName string
+	LastName  string
 }
 
 func (q *Queries) ListActiveMutedUsers(ctx context.Context, limitCount int32) ([]ListActiveMutedUsersRow, error) {

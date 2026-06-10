@@ -298,6 +298,14 @@ func formatRecentErrors() (string, error) {
 
 func getStatsKeyboard(screen string, period string) gotgbot.InlineKeyboardMarkup {
 	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 5)
+	if screen == statsScreenErrors {
+		return gotgbot.InlineKeyboardMarkup{
+			InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
+				statsHomeRow(),
+			},
+		}
+	}
+
 	if screen == statsScreenUsers || screen == statsScreenGroups {
 		chatType := database.ChatTypePrivate
 		if screen == statsScreenGroups {
@@ -326,11 +334,17 @@ func getStatsKeyboard(screen string, period string) gotgbot.InlineKeyboardMarkup
 	})
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
 		{Text: "📊 Özet", CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + period},
-		{Text: "⚙️ Admin", CallbackData: adminCallbackPrefix + adminScreenHome},
+		{Text: "🏠 Anamenü", CallbackData: adminCallbackPrefix + adminScreenHome},
 	})
 
 	return gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: buttons,
+	}
+}
+
+func statsHomeRow() []gotgbot.InlineKeyboardButton {
+	return []gotgbot.InlineKeyboardButton{
+		{Text: "🏠 Anamenü", CallbackData: adminCallbackPrefix + adminScreenHome},
 	}
 }
 

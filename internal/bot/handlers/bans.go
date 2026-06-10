@@ -28,6 +28,12 @@ func BannedUserHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 		return ext.ContinueGroups
 	}
 
+	if groupID, ok := effectiveGroupChatID(ctx); ok {
+		if ended, err := stopIfChatRestricted(bot, ctx, groupID); err != nil || ended {
+			return err
+		}
+	}
+
 	banned, err := database.Q().IsUserBanned(context.Background(), userID)
 	if err != nil {
 		return err
@@ -60,6 +66,37 @@ func BannedUserHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
 		ctx.InlineQuery.Answer(bot, []gotgbot.InlineQueryResult{}, nil)
 	}
 	return ext.EndGroups
+}
+
+func stopIfChatRestricted(bot *gotgbot.Bot, ctx *ext.Context, chatID int64) (bool, error) {
+	banned, err := database.Q().IsUserBanned(context.Background(), chatID)
+	if err != nil {
+		return false, err
+	}
+	if banned {
+		if ctx.CallbackQuery != nil {
+			ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
+				Text:      "Bu grup için bot kullanımı engellendi.",
+				ShowAlert: true,
+			})
+		}
+		return true, nil
+	}
+
+	activeMute, err := database.Q().GetActiveMute(context.Background(), chatID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if ctx.CallbackQuery != nil {
+		ctx.CallbackQuery.Answer(bot, &gotgbot.AnswerCallbackQueryOpts{
+			Text:      fmt.Sprintf("Bu grup geçici olarak susturuldu. Kalan: %s.", formatDurationLeft(activeMute.ExpiresAt.Time)),
+			ShowAlert: true,
+		})
+	}
+	return true, nil
 }
 
 func formatDurationLeft(expiresAt time.Time) string {
@@ -102,4 +139,11 @@ func effectiveUser(ctx *ext.Context) *gotgbot.User {
 	default:
 		return nil
 	}
+}
+
+func effectiveGroupChatID(ctx *ext.Context) (int64, bool) {
+	if ctx.EffectiveChat == nil || ctx.EffectiveChat.Id >= 0 {
+		return 0, false
+	}
+	return ctx.EffectiveChat.Id, true
 }

@@ -48,6 +48,9 @@ const (
 
 	adminPageSize      int32 = 5
 	adminActivityLimit int32 = 5
+
+	statusActive = "Aktif"
+	statusBanned = "Banlı"
 )
 
 func AdminHandler(bot *gotgbot.Bot, ctx *ext.Context) error {
@@ -294,9 +297,9 @@ func buildUserList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, 
 		totalAdminPages(total),
 	)
 	for index, row := range rows {
-		status := "Aktif"
+		status := statusActive
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
-			status = "Banlı"
+			status = statusBanned
 		} else if activeMute, err := database.Q().GetActiveMute(context.Background(), row.ChatID); err == nil {
 			status = "Susturuldu: " + formatDurationLeft(activeMute.ExpiresAt.Time)
 		}
@@ -345,9 +348,9 @@ func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup,
 		totalAdminPages(total),
 	)
 	for index, row := range rows {
-		status := "Aktif"
+		status := statusActive
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
-			status = "Banlı"
+			status = statusBanned
 		} else if activeMute, err := database.Q().GetActiveMute(context.Background(), row.ChatID); err == nil {
 			status = "Susturuldu: " + formatDurationLeft(activeMute.ExpiresAt.Time)
 		}
@@ -506,9 +509,9 @@ func buildUserProfile(value string) (string, gotgbot.InlineKeyboardMarkup, error
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
 
-	status := "Aktif"
+	status := statusActive
 	if banned {
-		status = "Banlı"
+		status = statusBanned
 	} else if muted {
 		status = "Susturuldu · kalan: " + formatDurationLeft(muteExpiresAt)
 	}
@@ -576,9 +579,9 @@ func buildGroupProfile(value string) (string, gotgbot.InlineKeyboardMarkup, erro
 	if err != nil {
 		return "", gotgbot.InlineKeyboardMarkup{}, err
 	}
-	status := "Aktif"
+	status := statusActive
 	if banned {
-		status = "Banlı"
+		status = statusBanned
 	} else if muted {
 		status = "Susturuldu · kalan: " + formatDurationLeft(muteExpiresAt)
 	}

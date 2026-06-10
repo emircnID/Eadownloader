@@ -720,10 +720,10 @@ func formatEventChatSuffix(chatType database.ChatType, chatID int64, title pgtyp
 	return " · grup: " + html.EscapeString(name)
 }
 
-func formatEventUserLabel(userID int64, username pgtype.Text, firstName pgtype.Text, lastName pgtype.Text) string {
-	name := strings.TrimSpace(joinValidTexts(firstName, lastName))
-	if name == "" && username.Valid && strings.TrimSpace(username.String) != "" {
-		name = "@" + strings.TrimSpace(username.String)
+func formatEventUserLabel(userID int64, username string, firstName string, lastName string) string {
+	name := strings.TrimSpace(strings.Join([]string{firstName, lastName}, " "))
+	if name == "" && strings.TrimSpace(username) != "" {
+		name = "@" + strings.TrimSpace(username)
 	}
 	if name == "" {
 		name = strconv.FormatInt(userID, 10)

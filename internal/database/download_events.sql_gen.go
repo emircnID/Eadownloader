@@ -193,9 +193,9 @@ type ListChatRecentDownloadEventsRow struct {
 	ContentID     string
 	ContentUrl    string
 	UserID        int64
-	UserUsername  pgtype.Text
-	UserFirstName pgtype.Text
-	UserLastName  pgtype.Text
+	UserUsername  string
+	UserFirstName string
+	UserLastName  string
 	ItemCount     int32
 	TotalFileSize int64
 	FromCache     bool

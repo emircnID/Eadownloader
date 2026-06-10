@@ -278,13 +278,13 @@ func buildUserList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup, 
 			status = "Susturuldu: " + formatDurationLeft(activeMute.ExpiresAt.Time)
 		}
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n<code>%d</code> · %s · Dil: %s · %s\n\n",
+			"<b>%d.</b> %s\n%s · Dil: %s · %s\n\nID : <code>%d</code>.\n\n",
 			int(pageOffset(page))+index+1,
 			formatAdminPageChatDisplayName(row),
-			row.ChatID,
 			status,
 			html.EscapeString(row.Language),
 			formatTimeAgo(row.LastSeenAt),
+			row.ChatID,
 		)
 	}
 
@@ -324,12 +324,12 @@ func buildGroupList(pageValues ...string) (string, gotgbot.InlineKeyboardMarkup,
 	)
 	for index, row := range rows {
 		text += fmt.Sprintf(
-			"<b>%d.</b> %s\n<code>%d</code> · Dil: %s · %s\n\n",
+			"<b>%d.</b> %s\nDil: %s · %s\n\nID : <code>%d</code>.\n\n",
 			int(pageOffset(page))+index+1,
 			formatAdminPageChatDisplayName(row),
-			row.ChatID,
 			html.EscapeString(row.Language),
 			formatTimeAgo(row.LastSeenAt),
+			row.ChatID,
 		)
 	}
 
@@ -830,8 +830,8 @@ func unmuteUserFromCallback(value string) (string, gotgbot.InlineKeyboardMarkup,
 	return buildUserProfile(value)
 }
 
-func userListKeyboard(rows []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
-	buttons := numberedUserButtons(rows)
+func userListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
+	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 4)
 	buttons = append(buttons, adminPaginationRows(adminScreenUsers, page, total)...)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
 		{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
@@ -841,23 +841,15 @@ func userListKeyboard(rows []database.ListChatsByTypePageRow, page int32, total 
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
-func groupListKeyboard(rows []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
-	buttons := numberedGroupButtons(rows)
+func groupListKeyboard(_ []database.ListChatsByTypePageRow, page int32, total int64) gotgbot.InlineKeyboardMarkup {
+	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 2)
 	buttons = append(buttons, adminPaginationRows(adminScreenGroups, page, total)...)
 	buttons = append(buttons, adminBackRow(adminScreenHome))
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
-func bannedUserListKeyboard(rows []database.ListBannedUsersRow) gotgbot.InlineKeyboardMarkup {
+func bannedUserListKeyboard(_ []database.ListBannedUsersRow) gotgbot.InlineKeyboardMarkup {
 	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 4)
-	numberedButtons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
-	for index, row := range rows {
-		numberedButtons = append(numberedButtons, gotgbot.InlineKeyboardButton{
-			Text:         fmt.Sprintf("👤 %d", index+1),
-			CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(row.UserID, 10),
-		})
-	}
-	buttons = append(buttons, chunkButtons(numberedButtons, 3)...)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
 		{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
 		{Text: "🔇 Susturulanlar", CallbackData: adminCallbackPrefix + adminScreenMutes},
@@ -866,44 +858,14 @@ func bannedUserListKeyboard(rows []database.ListBannedUsersRow) gotgbot.InlineKe
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
 }
 
-func mutedUserListKeyboard(rows []database.ListActiveMutedUsersRow) gotgbot.InlineKeyboardMarkup {
+func mutedUserListKeyboard(_ []database.ListActiveMutedUsersRow) gotgbot.InlineKeyboardMarkup {
 	buttons := make([][]gotgbot.InlineKeyboardButton, 0, 4)
-	numberedButtons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
-	for index, row := range rows {
-		numberedButtons = append(numberedButtons, gotgbot.InlineKeyboardButton{
-			Text:         fmt.Sprintf("👤 %d", index+1),
-			CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(row.UserID, 10),
-		})
-	}
-	buttons = append(buttons, chunkButtons(numberedButtons, 3)...)
 	buttons = append(buttons, []gotgbot.InlineKeyboardButton{
 		{Text: "👤 Kullanıcılar", CallbackData: adminCallbackPrefix + adminScreenUsers},
 		{Text: "⛔ Banlılar", CallbackData: adminCallbackPrefix + adminScreenBans},
 	})
 	buttons = append(buttons, adminBackRow(adminScreenModeration))
 	return gotgbot.InlineKeyboardMarkup{InlineKeyboard: buttons}
-}
-
-func numberedUserButtons(rows []database.ListChatsByTypePageRow) [][]gotgbot.InlineKeyboardButton {
-	buttons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
-	for index, row := range rows {
-		buttons = append(buttons, gotgbot.InlineKeyboardButton{
-			Text:         fmt.Sprintf("👤 %d", index+1),
-			CallbackData: adminCallbackPrefix + adminScreenUser + ":" + strconv.FormatInt(row.ChatID, 10),
-		})
-	}
-	return chunkButtons(buttons, 3)
-}
-
-func numberedGroupButtons(rows []database.ListChatsByTypePageRow) [][]gotgbot.InlineKeyboardButton {
-	buttons := make([]gotgbot.InlineKeyboardButton, 0, len(rows))
-	for index, row := range rows {
-		buttons = append(buttons, gotgbot.InlineKeyboardButton{
-			Text:         fmt.Sprintf("👥 %d", index+1),
-			CallbackData: adminCallbackPrefix + adminScreenGroup + ":" + strconv.FormatInt(row.ChatID, 10),
-		})
-	}
-	return chunkButtons(buttons, 3)
 }
 
 func userProfileKeyboard(userID int64, banned bool, muted bool) gotgbot.InlineKeyboardMarkup {
@@ -1022,15 +984,6 @@ func adminBackRow(screen string) []gotgbot.InlineKeyboardButton {
 	return []gotgbot.InlineKeyboardButton{
 		{Text: "⬅️ Geri", CallbackData: adminCallbackPrefix + screen},
 	}
-}
-
-func chunkButtons(buttons []gotgbot.InlineKeyboardButton, size int) [][]gotgbot.InlineKeyboardButton {
-	rows := make([][]gotgbot.InlineKeyboardButton, 0, (len(buttons)+size-1)/size)
-	for start := 0; start < len(buttons); start += size {
-		end := min(start+size, len(buttons))
-		rows = append(rows, buttons[start:end])
-	}
-	return rows
 }
 
 func formatBannedUserDisplayName(row database.ListBannedUsersRow) string {

@@ -215,20 +215,6 @@ func downloadFormat(
 			ctx, format.URL,
 			fileName, format.DownloadSettings,
 		)
-		if err != nil && format.DownloadSettings != nil &&
-			format.DownloadSettings.YtDLPFallbackURL != "" &&
-			format.DownloadSettings.YtDLPFallbackFormat != "" {
-			ctx.Warnf("direct download failed, trying yt-dlp fallback: %v", err)
-			ctx.Progress("📥 Alternatif yöntemle indiriliyor...")
-			fallbackSettings := cloneDownloadSettings(format.DownloadSettings)
-			fallbackSettings.YtDLPURL = fallbackSettings.YtDLPFallbackURL
-			fallbackSettings.YtDLPFormat = fallbackSettings.YtDLPFallbackFormat
-			filePath, err = download.DownloadFileWithYtDLP(
-				ctx,
-				fileName,
-				fallbackSettings,
-			)
-		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to download file: %w", err)

@@ -102,7 +102,7 @@ func SanitizeCaption(caption string) string {
 	return strings.TrimSpace(regex.ReplaceAllString(caption, ""))
 }
 
-func ExtractVideoFormats(media *MediaEntity, contentURL string, cookies []*http.Cookie) ([]*models.MediaFormat, error) {
+func ExtractVideoFormats(media *MediaEntity, contentURL string) ([]*models.MediaFormat, error) {
 	var formats []*models.MediaFormat
 
 	if media.VideoInfo == nil {
@@ -126,7 +126,7 @@ func ExtractVideoFormats(media *MediaEntity, contentURL string, cookies []*http.
 				Width:            width,
 				Height:           height,
 				Bitrate:          variant.Bitrate,
-				DownloadSettings: twitterDownloadSettings(contentURL, cookies),
+				DownloadSettings: twitterDownloadSettings(contentURL),
 			})
 		}
 	}
@@ -134,22 +134,44 @@ func ExtractVideoFormats(media *MediaEntity, contentURL string, cookies []*http.
 	return formats, nil
 }
 
-func twitterDownloadSettings(contentURL string, cookies []*http.Cookie) *models.DownloadSettings {
-	referer := contentURL
-	if referer == "" {
-		referer = "https://x.com/"
-	}
+func twitterDownloadSettings(contentURL string) *models.DownloadSettings {
+	referer := canonicalTwitterReferer(contentURL)
 
 	return &models.DownloadSettings{
 		Headers: map[string]string{
-			"Referer": referer,
-			"Origin":  "https://x.com",
+			"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+			"Accept":          "*/*",
+			"Accept-Language": "en-US,en;q=0.9",
+			"Referer":         referer,
 		},
-		Cookies:       cookies,
-		Retries:       3,
-		SkipRemux:     true,
-		SkipThumbnail: true,
+		Retries:        3,
+		NumConnections: 1,
+		Impersonate:    true,
+		SkipRemux:      true,
+		SkipThumbnail:  true,
 	}
+}
+
+func canonicalTwitterReferer(contentURL string) string {
+	if contentURL == "" {
+		return "https://twitter.com/"
+	}
+
+	parsed, err := url.Parse(contentURL)
+	if err != nil {
+		return "https://twitter.com/"
+	}
+
+	switch parsed.Host {
+	case "x.com", "www.x.com":
+		parsed.Host = strings.Replace(parsed.Host, "x.com", "twitter.com", 1)
+	case "twitter.com", "www.twitter.com":
+	default:
+		return "https://twitter.com/"
+	}
+
+	parsed.Scheme = "https"
+	return parsed.String()
 }
 
 func ResolutionFromURL(url string) (int32, int32) {

@@ -13,6 +13,7 @@ type HTTPClient struct {
 	Client        HTTPClientInterface
 	Headers       map[string]string
 	Cookies       []*http.Cookie
+	Impersonate   bool
 	Proxy         string
 	EdgeProxy     string
 	DownloadProxy string

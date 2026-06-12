@@ -7,6 +7,7 @@ type DownloadSettings struct {
 	ChunkSize      int64
 	Headers        map[string]string
 	Cookies        []*http.Cookie
+	Impersonate    bool
 	DecryptionKey  *DecryptionKey
 	Retries        int
 	SkipRemux      bool

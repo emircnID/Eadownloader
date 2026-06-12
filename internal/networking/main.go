@@ -15,6 +15,7 @@ func NewHTTPClient(options *NewHTTPClientOptions) *HTTPClient {
 		options = &NewHTTPClientOptions{}
 	}
 	client := DefaultHTTPClient(options)
+	client.Impersonate = options.Impersonate
 
 	switch {
 	case options.Proxy != "":
@@ -55,16 +56,21 @@ func DefaultHTTPClient(options *NewHTTPClientOptions) *HTTPClient {
 			Transport: NewTransport(),
 			Timeout:   defaultTimeout,
 		},
-		Headers: options.Headers,
-		Cookies: options.Cookies,
+		Headers:     options.Headers,
+		Cookies:     options.Cookies,
+		Impersonate: options.Impersonate,
 	}
 }
 
 func (c *HTTPClient) AsDownloadClient() *HTTPClient {
 	client := DefaultHTTPClient(&NewHTTPClientOptions{
-		Headers: c.Headers,
-		Cookies: c.Cookies,
+		Headers:     c.Headers,
+		Cookies:     c.Cookies,
+		Impersonate: c.Impersonate,
 	})
+	if c.Impersonate {
+		client.Client = NewChromeClient()
+	}
 	if c.DownloadProxy != "" {
 		proxyURL, err := url.Parse(c.DownloadProxy)
 		if err != nil {

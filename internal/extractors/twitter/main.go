@@ -109,7 +109,7 @@ func MediaFromAPI(ctx *models.ExtractorContext) (*models.Media, error) {
 
 		switch mediaEntity.Type {
 		case "video", "animated_gif":
-			formats, err := ExtractVideoFormats(mediaEntity, ctx.ContentURL, ctx.HTTPClient.Cookies)
+			formats, err := ExtractVideoFormats(mediaEntity, ctx.ContentURL)
 			if err != nil {
 				return nil, err
 			}
@@ -119,7 +119,7 @@ func MediaFromAPI(ctx *models.ExtractorContext) (*models.Media, error) {
 				Type:             database.MediaTypePhoto,
 				FormatID:         "photo",
 				URL:              []string{mediaEntity.MediaURLHTTPS},
-				DownloadSettings: twitterDownloadSettings(ctx.ContentURL, ctx.HTTPClient.Cookies),
+				DownloadSettings: twitterDownloadSettings(ctx.ContentURL),
 			})
 		}
 	}
@@ -212,12 +212,12 @@ func MediaFromFXAPI(ctx *models.ExtractorContext) (*models.Media, error) {
 			URL:              []string{photo.URL},
 			Width:            photo.Width,
 			Height:           photo.Height,
-			DownloadSettings: twitterDownloadSettings(ctx.ContentURL, ctx.HTTPClient.Cookies),
+			DownloadSettings: twitterDownloadSettings(ctx.ContentURL),
 		})
 	}
 
 	for _, video := range status.Media.Videos {
-		formats := formatsFromFXVideo(video, ctx.ContentURL, ctx.HTTPClient.Cookies)
+		formats := formatsFromFXVideo(video, ctx.ContentURL)
 		if len(formats) == 0 && video.URL != "" {
 			formats = append(formats, &models.MediaFormat{
 				Type:             database.MediaTypeVideo,
@@ -230,7 +230,7 @@ func MediaFromFXAPI(ctx *models.ExtractorContext) (*models.Media, error) {
 				Width:            video.Width,
 				Height:           video.Height,
 				FileSize:         video.Filesize,
-				DownloadSettings: twitterDownloadSettings(ctx.ContentURL, ctx.HTTPClient.Cookies),
+				DownloadSettings: twitterDownloadSettings(ctx.ContentURL),
 			})
 		}
 		if len(formats) == 0 {
@@ -286,7 +286,7 @@ func GetTweetFXAPI(ctx *models.ExtractorContext) (*FXStatus, error) {
 	return apiResponse.Status, nil
 }
 
-func formatsFromFXVideo(video FXVideo, contentURL string, cookies []*http.Cookie) []*models.MediaFormat {
+func formatsFromFXVideo(video FXVideo, contentURL string) []*models.MediaFormat {
 	formats := make([]*models.MediaFormat, 0, len(video.Formats))
 	duration := int32(video.Duration)
 
@@ -322,7 +322,7 @@ func formatsFromFXVideo(video FXVideo, contentURL string, cookies []*http.Cookie
 			Height:           firstInt32(source.Height, video.Height),
 			Bitrate:          source.Bitrate,
 			FileSize:         firstInt64(source.Size, video.Filesize),
-			DownloadSettings: twitterDownloadSettings(contentURL, cookies),
+			DownloadSettings: twitterDownloadSettings(contentURL),
 		})
 	}
 	return formats

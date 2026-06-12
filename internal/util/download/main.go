@@ -31,7 +31,7 @@ func DownloadFile(
 	settings = ensureDownloadSettings(settings)
 	ensureDownloadDir()
 
-	client := ctx.HTTPClient.AsDownloadClient()
+	client := downloadClient(ctx, settings)
 
 	filePath := ToPath(fileName)
 	ctx.FilesTracker.Add(filePath)
@@ -198,7 +198,7 @@ func DownloadFileWithSegments(
 	settings = ensureDownloadSettings(settings)
 	ensureDownloadDir()
 
-	client := ctx.HTTPClient.AsDownloadClient()
+	client := downloadClient(ctx, settings)
 
 	filePath := ToPath(fileName)
 	ctx.FilesTracker.Add(filePath)
@@ -262,7 +262,7 @@ func DownloadFileInMemory(
 	}
 	settings = ensureDownloadSettings(settings)
 
-	client := ctx.HTTPClient.AsDownloadClient()
+	client := downloadClient(ctx, settings)
 	maxRetries := max(settings.Retries, 1)
 	var lastErr error
 
@@ -384,6 +384,15 @@ func downloadSequential(
 	}
 
 	return lastErr
+}
+
+func downloadClient(ctx *models.ExtractorContext, settings *models.DownloadSettings) *networking.HTTPClient {
+	client := ctx.HTTPClient.AsDownloadClient()
+	if settings != nil && settings.Impersonate {
+		client.Client = networking.NewChromeClient()
+		client.Impersonate = true
+	}
+	return client
 }
 
 func resetFile(file *os.File) error {

@@ -194,20 +194,20 @@ func buildAdminHome(localizer *localization.Localizer) (string, gotgbot.InlineKe
 	}
 
 	text := fmt.Sprintf(
-		"<b>?? %s</b>\n"+
+		"<b>⚙️ %s</b>\n"+
 			"<i>%s</i>\n\n"+
-			"<b>?? %s</b>\n"+
+			"<b>📊 %s</b>\n"+
 			"%s\n%s\n%s\n%s\n%s\n\n"+
-			"?? %s: <b>%s</b>\n\n"+
+			"💾 %s: <b>%s</b>\n\n"+
 			"%s",
 		adminText(localizer, localization.AdminTitle),
 		adminText(localizer, localization.AdminOperationPanel),
 		adminText(localizer, localization.AdminGeneralStatus),
-		metricBar("?? "+adminText(localizer, localization.AdminUsers), stats.TotalPrivateChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
-		metricBar("?? "+adminText(localizer, localization.AdminGroups), stats.TotalGroupChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
-		metricBar("?? "+adminText(localizer, localization.AdminDownloads), stats.TotalDownloads, stats.TotalDownloads),
-		metricBar("?? "+adminText(localizer, localization.AdminMuted), mutedCount, max(stats.TotalPrivateChats+stats.TotalGroupChats, 1)),
-		metricBar("? "+adminText(localizer, localization.AdminBanned), bannedCount, max(stats.TotalPrivateChats+stats.TotalGroupChats, 1)),
+		metricBar("👤 "+adminText(localizer, localization.AdminUsers), stats.TotalPrivateChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
+		metricBar("👥 "+adminText(localizer, localization.AdminGroups), stats.TotalGroupChats, max(stats.TotalPrivateChats, stats.TotalGroupChats)),
+		metricBar("📥 "+adminText(localizer, localization.AdminDownloads), stats.TotalDownloads, stats.TotalDownloads),
+		metricBar("🔇 "+adminText(localizer, localization.AdminMuted), mutedCount, max(stats.TotalPrivateChats+stats.TotalGroupChats, 1)),
+		metricBar("⛔ "+adminText(localizer, localization.AdminBanned), bannedCount, max(stats.TotalPrivateChats+stats.TotalGroupChats, 1)),
 		adminText(localizer, localization.AdminTotal),
 		formatBytes(stats.TotalDownloadsSize),
 		adminText(localizer, localization.AdminChooseSection),
@@ -215,8 +215,8 @@ func buildAdminHome(localizer *localization.Localizer) (string, gotgbot.InlineKe
 
 	return text, gotgbot.InlineKeyboardMarkup{
 		InlineKeyboard: [][]gotgbot.InlineKeyboardButton{
-			{{Text: adminText(localizer, localization.AdminUsers), CallbackData: adminCallbackPrefix + adminScreenUsers}, {Text: adminText(localizer, localization.AdminGroups), CallbackData: adminCallbackPrefix + adminScreenGroups}},
-			{{Text: adminText(localizer, localization.AdminAnalytics), CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll}, {Text: adminText(localizer, localization.AdminSystemPanel), CallbackData: adminCallbackPrefix + adminScreenSystem}},
+			{{Text: "👤 " + adminText(localizer, localization.AdminUsers), CallbackData: adminCallbackPrefix + adminScreenUsers}, {Text: "👥 " + adminText(localizer, localization.AdminGroups), CallbackData: adminCallbackPrefix + adminScreenGroups}},
+			{{Text: "📊 " + adminText(localizer, localization.AdminAnalytics), CallbackData: statsCallbackPrefix + statsScreenSummary + ":" + statsPeriodAll}, {Text: "🖥 " + adminText(localizer, localization.AdminSystemPanel), CallbackData: adminCallbackPrefix + adminScreenSystem}},
 		},
 	}, nil
 }
@@ -259,10 +259,10 @@ func buildUserList(localizer *localization.Localizer, pageValues ...string) (str
 	}
 
 	if len(rows) == 0 {
-		return "<b>?? " + adminText(localizer, localization.AdminUsers) + "</b>\n\n" + adminText(localizer, localization.AdminNoUsers), userListKeyboard(rows, page, total), nil
+		return "<b>👤 " + adminText(localizer, localization.AdminUsers) + "</b>\n\n" + adminText(localizer, localization.AdminNoUsers), userListKeyboard(rows, page, total), nil
 	}
 
-	text := fmt.Sprintf("<b>?? %s</b>\n%s: <b>%d</b> ? %s: <b>%d/%d</b>\n\n", adminText(localizer, localization.AdminUsers), adminText(localizer, localization.AdminTotal), total, adminText(localizer, localization.AdminPage), page+1, totalAdminPages(total))
+	text := fmt.Sprintf("<b>👤 %s</b>\n%s: <b>%d</b> · %s: <b>%d/%d</b>\n\n", adminText(localizer, localization.AdminUsers), adminText(localizer, localization.AdminTotal), total, adminText(localizer, localization.AdminPage), page+1, totalAdminPages(total))
 	for index, row := range rows {
 		status := adminText(localizer, localization.StatusActive)
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
@@ -270,7 +270,7 @@ func buildUserList(localizer *localization.Localizer, pageValues ...string) (str
 		} else if activeMute, err := database.Q().GetActiveMute(context.Background(), row.ChatID); err == nil {
 			status = strings.Replace(adminText(localizer, localization.StatusMutedRemaining), "{{.Duration}}", formatDurationLeft(activeMute.ExpiresAt.Time), 1)
 		}
-		text += fmt.Sprintf("<b>%d.</b> %s\n%s ? %s\nID : <code>%d</code>\n\n", int(pageOffset(page))+index+1, formatAdminPageChatDisplayName(row), status, formatTimeAgo(row.LastSeenAt), row.ChatID)
+		text += fmt.Sprintf("<b>%d.</b> %s\n%s · %s\nID : <code>%d</code>\n\n", int(pageOffset(page))+index+1, formatAdminPageChatDisplayName(row), status, formatTimeAgo(row.LastSeenAt), row.ChatID)
 	}
 
 	return strings.TrimSpace(text), userListKeyboard(rows, page, total), nil
@@ -293,10 +293,10 @@ func buildGroupList(localizer *localization.Localizer, pageValues ...string) (st
 	}
 
 	if len(rows) == 0 {
-		return "<b>?? " + adminText(localizer, localization.AdminGroups) + "</b>\n\n" + adminText(localizer, localization.AdminNoGroups), groupListKeyboard(rows, page, total), nil
+		return "<b>👥 " + adminText(localizer, localization.AdminGroups) + "</b>\n\n" + adminText(localizer, localization.AdminNoGroups), groupListKeyboard(rows, page, total), nil
 	}
 
-	text := fmt.Sprintf("<b>?? %s</b>\n%s: <b>%d</b> ? %s: <b>%d/%d</b>\n\n", adminText(localizer, localization.AdminGroups), adminText(localizer, localization.AdminTotal), total, adminText(localizer, localization.AdminPage), page+1, totalAdminPages(total))
+	text := fmt.Sprintf("<b>👥 %s</b>\n%s: <b>%d</b> · %s: <b>%d/%d</b>\n\n", adminText(localizer, localization.AdminGroups), adminText(localizer, localization.AdminTotal), total, adminText(localizer, localization.AdminPage), page+1, totalAdminPages(total))
 	for index, row := range rows {
 		status := adminText(localizer, localization.StatusActive)
 		if banned, err := database.Q().IsUserBanned(context.Background(), row.ChatID); err == nil && banned {
@@ -304,7 +304,7 @@ func buildGroupList(localizer *localization.Localizer, pageValues ...string) (st
 		} else if activeMute, err := database.Q().GetActiveMute(context.Background(), row.ChatID); err == nil {
 			status = strings.Replace(adminText(localizer, localization.StatusMutedRemaining), "{{.Duration}}", formatDurationLeft(activeMute.ExpiresAt.Time), 1)
 		}
-		text += fmt.Sprintf("<b>%d.</b> %s\n%s ? %s\nID : <code>%d</code>\n\n", int(pageOffset(page))+index+1, formatAdminPageChatDisplayName(row), status, formatTimeAgo(row.LastSeenAt), row.ChatID)
+		text += fmt.Sprintf("<b>%d.</b> %s\n%s · %s\nID : <code>%d</code>\n\n", int(pageOffset(page))+index+1, formatAdminPageChatDisplayName(row), status, formatTimeAgo(row.LastSeenAt), row.ChatID)
 	}
 
 	return strings.TrimSpace(text), groupListKeyboard(rows, page, total), nil
@@ -772,7 +772,7 @@ func buildUnknownUserProfile(localizer *localization.Localizer, userID int64) (s
 	}
 
 	text := fmt.Sprintf(
-		"<b>?? %s</b>\n\n"+
+		"<b>👤 %s</b>\n\n"+
 			"%s: <code>%d</code>\n"+
 			"%s: %s\n"+
 			"%s: %s\n\n"+
@@ -799,11 +799,11 @@ func buildBanConfirm(localizer *localization.Localizer, value string) (string, g
 		return buildUserList(localizer)
 	}
 	if util.IsAdminID(userID) {
-		return "<b>?? " + adminText(localizer, localization.AdminProtectedUser) + "</b>\n\n" + adminText(localizer, localization.AdminAdminsCannotBan), userProfileKeyboard(userID, false, false), nil
+		return "<b>🛡 " + adminText(localizer, localization.AdminProtectedUser) + "</b>\n\n" + adminText(localizer, localization.AdminAdminsCannotBan), userProfileKeyboard(userID, false, false), nil
 	}
 
 	text := fmt.Sprintf(
-		"<b>? %s</b>\n\n"+
+		"<b>⛔ %s</b>\n\n"+
 			"%s: <code>%d</code>\n\n"+
 			"%s",
 		adminText(localizer, localization.AdminBanConfirmTitle),
@@ -877,13 +877,13 @@ func buildSystemPanel(localizer *localization.Localizer) (string, gotgbot.Inline
 	uptime := time.Since(StartTime)
 
 	text := fmt.Sprintf(
-		"<b>?? %s</b>\n\n"+
-			"? ?al??ma S?resi: <b>%s</b>\n"+
-			"?? %s Goroutine: <b>%d</b>\n"+
-			"?? Kullan?lan Bellek: <b>%.2f MB</b>\n"+
-			"?? Sistem Belle?i: <b>%.2f MB</b>\n"+
-			"?? CPU ?ekirde?i: <b>%d</b>\n\n"+
-			"<b>?? Konfig?rasyon</b>\n"+
+		"<b>🖥️ %s</b>\n\n"+
+			"⏱ Çalışma Süresi: <b>%s</b>\n"+
+			"🧵 %s Goroutine: <b>%d</b>\n"+
+			"🐏 Kullanılan Bellek: <b>%.2f MB</b>\n"+
+			"💾 Sistem Belleği: <b>%.2f MB</b>\n"+
+			"⚙️ CPU Çekirdeği: <b>%d</b>\n\n"+
+			"<b>⚙️ Konfigürasyon</b>\n"+
 			"Adminler: %d\n"+
 			"Whitelist: %d\n"+
 			"%s chat: %d\n"+

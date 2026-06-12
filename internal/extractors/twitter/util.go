@@ -15,6 +15,7 @@ import (
 )
 
 const authToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+const defaultTwitterReferer = "https://twitter.com/"
 
 var resolutionRegex = regexp.MustCompile(`(\d+)x(\d+)`)
 
@@ -154,12 +155,12 @@ func twitterDownloadSettings(contentURL string) *models.DownloadSettings {
 
 func canonicalTwitterReferer(contentURL string) string {
 	if contentURL == "" {
-		return "https://twitter.com/"
+		return defaultTwitterReferer
 	}
 
 	parsed, err := url.Parse(contentURL)
 	if err != nil {
-		return "https://twitter.com/"
+		return defaultTwitterReferer
 	}
 
 	switch parsed.Host {
@@ -167,7 +168,7 @@ func canonicalTwitterReferer(contentURL string) string {
 		parsed.Host = strings.Replace(parsed.Host, "x.com", "twitter.com", 1)
 	case "twitter.com", "www.twitter.com":
 	default:
-		return "https://twitter.com/"
+		return defaultTwitterReferer
 	}
 
 	parsed.Scheme = "https"

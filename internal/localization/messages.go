@@ -191,4 +191,292 @@ var (
 		ID:    "ErrorPermissionDenied",
 		Other: "The bot does not have sufficient permissions to send this media. Please grant the necessary permissions and try again.",
 	}
+	AdminTitle = &i18n.Message{
+		ID:    "AdminTitle",
+		Other: "Admin Panel",
+	}
+	AdminOperationPanel = &i18n.Message{
+		ID:    "AdminOperationPanel",
+		Other: "Operations panel",
+	}
+	AdminGeneralStatus = &i18n.Message{
+		ID:    "AdminGeneralStatus",
+		Other: "General Status",
+	}
+	AdminChooseSection = &i18n.Message{
+		ID:    "AdminChooseSection",
+		Other: "Choose a section.",
+	}
+	AdminUsers = &i18n.Message{
+		ID:    "AdminUsers",
+		Other: "Users",
+	}
+	AdminGroups = &i18n.Message{
+		ID:    "AdminGroups",
+		Other: "Groups",
+	}
+	AdminDownloads = &i18n.Message{
+		ID:    "AdminDownloads",
+		Other: "Downloads",
+	}
+	AdminMuted = &i18n.Message{
+		ID:    "AdminMuted",
+		Other: "Muted",
+	}
+	AdminBanned = &i18n.Message{
+		ID:    "AdminBanned",
+		Other: "Banned",
+	}
+	AdminAnalytics = &i18n.Message{
+		ID:    "AdminAnalytics",
+		Other: "Analytics",
+	}
+	AdminSystemPanel = &i18n.Message{
+		ID:    "AdminSystemPanel",
+		Other: "System Panel",
+	}
+	AdminHomeButton = &i18n.Message{
+		ID:    "AdminHomeButton",
+		Other: "Home",
+	}
+	AdminTotal = &i18n.Message{
+		ID:    "AdminTotal",
+		Other: "Total",
+	}
+	AdminPage = &i18n.Message{
+		ID:    "AdminPage",
+		Other: "Page",
+	}
+	AdminFirstPageButton = &i18n.Message{
+		ID:    "AdminFirstPageButton",
+		Other: "First page",
+	}
+	AdminPreviousPageButton = &i18n.Message{
+		ID:    "AdminPreviousPageButton",
+		Other: "Previous",
+	}
+	AdminNextPageButton = &i18n.Message{
+		ID:    "AdminNextPageButton",
+		Other: "Next",
+	}
+	AdminLastPageButton = &i18n.Message{
+		ID:    "AdminLastPageButton",
+		Other: "Last page",
+	}
+	AdminNoUsers = &i18n.Message{
+		ID:    "AdminNoUsers",
+		Other: "No users have been recorded yet.",
+	}
+	AdminNoGroups = &i18n.Message{
+		ID:    "AdminNoGroups",
+		Other: "No groups have been recorded yet.",
+	}
+	AdminMutedUsers = &i18n.Message{
+		ID:    "AdminMutedUsers",
+		Other: "Muted Users",
+	}
+	AdminBannedUsers = &i18n.Message{
+		ID:    "AdminBannedUsers",
+		Other: "Banned Users",
+	}
+	AdminMutedGroups = &i18n.Message{
+		ID:    "AdminMutedGroups",
+		Other: "Muted Groups",
+	}
+	AdminBannedGroups = &i18n.Message{
+		ID:    "AdminBannedGroups",
+		Other: "Banned Groups",
+	}
+	AdminNoMutedUsers = &i18n.Message{
+		ID:    "AdminNoMutedUsers",
+		Other: "No muted users right now.",
+	}
+	AdminNoBannedUsers = &i18n.Message{
+		ID:    "AdminNoBannedUsers",
+		Other: "No banned users yet.",
+	}
+	AdminNoMutedGroups = &i18n.Message{
+		ID:    "AdminNoMutedGroups",
+		Other: "No muted groups right now.",
+	}
+	AdminNoBannedGroups = &i18n.Message{
+		ID:    "AdminNoBannedGroups",
+		Other: "No banned groups yet.",
+	}
+	AdminUserProfileTitle = &i18n.Message{
+		ID:    "AdminUserProfileTitle",
+		Other: "User Profile",
+	}
+	AdminGroupProfileTitle = &i18n.Message{
+		ID:    "AdminGroupProfileTitle",
+		Other: "Group Profile",
+	}
+	AdminIDLabel = &i18n.Message{
+		ID:    "AdminIDLabel",
+		Other: "ID",
+	}
+	AdminUsernameLabel = &i18n.Message{
+		ID:    "AdminUsernameLabel",
+		Other: "Username",
+	}
+	AdminStatusLabel = &i18n.Message{
+		ID:    "AdminStatusLabel",
+		Other: "Status",
+	}
+	AdminRegisteredLabel = &i18n.Message{
+		ID:    "AdminRegisteredLabel",
+		Other: "Registered",
+	}
+	AdminLastSeenLabel = &i18n.Message{
+		ID:    "AdminLastSeenLabel",
+		Other: "Last seen",
+	}
+	AdminLastActiveLabel = &i18n.Message{
+		ID:    "AdminLastActiveLabel",
+		Other: "Last active",
+	}
+	AdminActivityTitle = &i18n.Message{
+		ID:    "AdminActivityTitle",
+		Other: "Activity",
+	}
+	AdminPlatformsTitle = &i18n.Message{
+		ID:    "AdminPlatformsTitle",
+		Other: "Platforms",
+	}
+	AdminNoRecords = &i18n.Message{
+		ID:    "AdminNoRecords",
+		Other: "No records.",
+	}
+	AdminRecentDownloads = &i18n.Message{
+		ID:    "AdminRecentDownloads",
+		Other: "Recent Downloads",
+	}
+	AdminReasonLabel = &i18n.Message{
+		ID:    "AdminReasonLabel",
+		Other: "Reason",
+	}
+	AdminUnknownUser = &i18n.Message{
+		ID:    "AdminUnknownUser",
+		Other: "unknown",
+	}
+	AdminProtectedUser = &i18n.Message{
+		ID:    "AdminProtectedUser",
+		Other: "Protected User",
+	}
+	AdminAdminsCannotBan = &i18n.Message{
+		ID:    "AdminAdminsCannotBan",
+		Other: "Admins cannot be banned.",
+	}
+	AdminAdminsCannotMute = &i18n.Message{
+		ID:    "AdminAdminsCannotMute",
+		Other: "Admins cannot be muted.",
+	}
+	AdminBanConfirmTitle = &i18n.Message{
+		ID:    "AdminBanConfirmTitle",
+		Other: "Ban Confirmation",
+	}
+	AdminGroupBanConfirmTitle = &i18n.Message{
+		ID:    "AdminGroupBanConfirmTitle",
+		Other: "Group Ban Confirmation",
+	}
+	AdminBanButton = &i18n.Message{
+		ID:    "AdminBanButton",
+		Other: "Ban",
+	}
+	AdminUnbanButton = &i18n.Message{
+		ID:    "AdminUnbanButton",
+		Other: "Unban",
+	}
+	AdminMute1hButton = &i18n.Message{
+		ID:    "AdminMute1hButton",
+		Other: "Mute 1h",
+	}
+	AdminMute24hButton = &i18n.Message{
+		ID:    "AdminMute24hButton",
+		Other: "Mute 24h",
+	}
+	AdminUnmuteButton = &i18n.Message{
+		ID:    "AdminUnmuteButton",
+		Other: "Unmute",
+	}
+	AdminGroupBanButton = &i18n.Message{
+		ID:    "AdminGroupBanButton",
+		Other: "Ban Group",
+	}
+	AdminGroupUnbanButton = &i18n.Message{
+		ID:    "AdminGroupUnbanButton",
+		Other: "Unban Group",
+	}
+	AdminGroupMute1hButton = &i18n.Message{
+		ID:    "AdminGroupMute1hButton",
+		Other: "Mute 1h",
+	}
+	AdminGroupMute24hButton = &i18n.Message{
+		ID:    "AdminGroupMute24hButton",
+		Other: "Mute 24h",
+	}
+	AdminCleanupTitle = &i18n.Message{
+		ID:    "AdminCleanupTitle",
+		Other: "Database Cleanup",
+	}
+	AdminCleanupSelectCategory = &i18n.Message{
+		ID:    "AdminCleanupSelectCategory",
+		Other: "Select the category you want to clean.",
+	}
+	AdminCleanupUsersButton = &i18n.Message{
+		ID:    "AdminCleanupUsersButton",
+		Other: "Clear All Users",
+	}
+	AdminCleanupGroupsButton = &i18n.Message{
+		ID:    "AdminCleanupGroupsButton",
+		Other: "Clear All Groups",
+	}
+	AdminCleanupDownloadsButton = &i18n.Message{
+		ID:    "AdminCleanupDownloadsButton",
+		Other: "Clear Download History",
+	}
+	AdminCleanupErrorsButton = &i18n.Message{
+		ID:    "AdminCleanupErrorsButton",
+		Other: "Clear Errors",
+	}
+	AdminCleanupCleaning = &i18n.Message{
+		ID:    "AdminCleanupCleaning",
+		Other: "Cleaning...",
+	}
+	AdminCleanupUsersSuccess = &i18n.Message{
+		ID:    "AdminCleanupUsersSuccess",
+		Other: "users were removed from the database.",
+	}
+	AdminCleanupGroupsSuccess = &i18n.Message{
+		ID:    "AdminCleanupGroupsSuccess",
+		Other: "groups were removed from the database.",
+	}
+	AdminCleanupDownloadsSuccess = &i18n.Message{
+		ID:    "AdminCleanupDownloadsSuccess",
+		Other: "Download history was cleared.",
+	}
+	AdminCleanupErrorsSuccess = &i18n.Message{
+		ID:    "AdminCleanupErrorsSuccess",
+		Other: "Error records were cleared.",
+	}
+	AdminCleanupErrorPrefix = &i18n.Message{
+		ID:    "AdminCleanupErrorPrefix",
+		Other: "Error:",
+	}
+	StatusActive = &i18n.Message{
+		ID:    "StatusActive",
+		Other: "Active",
+	}
+	StatusBanned = &i18n.Message{
+		ID:    "StatusBanned",
+		Other: "Banned",
+	}
+	StatusMutedRemaining = &i18n.Message{
+		ID:    "StatusMutedRemaining",
+		Other: "Muted · remaining: {{.Duration}}",
+	}
+	StatusUnknown = &i18n.Message{
+		ID:    "StatusUnknown",
+		Other: "unknown",
+	}
 )

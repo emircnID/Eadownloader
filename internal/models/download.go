@@ -18,4 +18,8 @@ type DownloadSettings struct {
 	YtDLPCookieJar string
 	YtDLPArgs      string
 	YtDLPAudio     bool
+
+	// fallback: if direct download fails, try yt-dlp with these settings
+	YtDLPFallbackURL    string
+	YtDLPFallbackFormat string
 }

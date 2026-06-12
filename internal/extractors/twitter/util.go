@@ -146,11 +146,13 @@ func twitterDownloadSettings(contentURL string) *models.DownloadSettings {
 			"Origin":          "https://x.com",
 			"Referer":         referer,
 		},
-		Retries:        3,
-		NumConnections: 1,
-		Impersonate:    true,
-		SkipRemux:      true,
-		SkipThumbnail:  true,
+		Retries:             3,
+		NumConnections:      1,
+		Impersonate:         true,
+		SkipRemux:           true,
+		SkipThumbnail:       true,
+		YtDLPFallbackURL:    contentURL,
+		YtDLPFallbackFormat: "bv*+ba/b",
 	}
 }
 
